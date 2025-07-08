@@ -1,0 +1,378 @@
+/**
+ * Grammar Quiz Manager Hook
+ * 
+ * Manages state and logic for the Grammar Construction Quiz feature.
+ * Follows existing patterns from useQuizManager.ts for consistency.
+ */
+
+import { useState, useCallback, useEffect, useRef } from 'react';
+import {
+  GrammarQuizQuestion,
+  GrammarQuizSession,
+  QuizSettings,
+  UserSelection,
+  AnswerValidation,
+  QuizState,
+  QuestionResult,
+  GrammarConstruction
+} from '@/types/grammarQuiz';
+import { grammarQuizEngine } from '@/utils/grammarQuizEngine';
+import { MorphologicalDetails } from '@/types/morphology';
+
+/**
+ * Extended interface to support multiple constructions per verse
+ */
+interface MultiConstructionSelection {
+  id: string;
+  indices: number[];
+  constructionType: 'mudaf-mudaf-ilayh' | 'jar-majroor';
+  timestamp: Date;
+  isSubmitted: boolean;
+  validation?: AnswerValidation;
+}
+
+interface GrammarQuizManagerState {
+  quizState: QuizState;
+  currentSession: GrammarQuizSession | null;
+  questionStartTime: number;
+  // Support multiple constructions per verse
+  currentSelections: MultiConstructionSelection[];
+  activeSelectionId: string | null; // Currently being selected
+  selectedIndices: number[]; // For current active selection
+  selectedConstructionType: 'mudaf-mudaf-ilayh' | 'jar-majroor' | null;
+  submittedConstructions: MultiConstructionSelection[]; // All submitted constructions for current question
+}
+
+export function useGrammarQuizManager() {
+  const [state, setState] = useState<GrammarQuizManagerState>({
+    quizState: {
+      userSelection: null,
+      isAnswered: false,
+      showFeedback: false,
+      isLoading: false,
+      progress: { current: 0, total: 0, percentage: 0 }
+    },
+    currentSession: null,
+    questionStartTime: 0,
+    currentSelections: [],
+    activeSelectionId: null,
+    selectedIndices: [],
+    selectedConstructionType: null,
+    submittedConstructions: []
+  });
+
+  const currentValidation = useRef<AnswerValidation | null>(null);
+
+  // Session Management
+  const startSession = useCallback((settings: QuizSettings) => {
+    console.log('🎯 Starting Grammar Construction Quiz session');
+    
+    const session = grammarQuizEngine.startSession(settings);
+    
+    setState(prev => ({
+      ...prev,
+      currentSession: session,
+      quizState: {
+        ...prev.quizState,
+        isLoading: true,
+        error: undefined,
+        progress: { current: 0, total: settings.questionCount, percentage: 0 }
+      },
+      selectedIndices: [],
+      selectedConstructionType: null
+    }));
+
+    // Load first question with the new session to avoid closure issue
+    loadNextQuestion(session);
+  }, []);
+
+  const loadNextQuestion = useCallback(async (sessionParam?: GrammarQuizSession) => {
+    // Use provided session parameter or fall back to state.currentSession
+    const session = sessionParam || state.currentSession;
+    if (!session) return;
+
+    setState(prev => ({ ...prev, quizState: { ...prev.quizState, isLoading: true } }));
+
+    try {
+      // For demo, we'll use sample segments - in production this would come from a question bank
+      const sampleSegments: Record<string, MorphologicalDetails> = {
+        '1-1-1-1': {
+          id: '1-1-1-1',
+          text: 'كتاب',
+          morphology: 'noun',
+          case: 'nominative',
+          grammaticalRole: 'mudaf',
+          type: 'root'
+        },
+        '1-1-1-2': {
+          id: '1-1-1-2',
+          text: 'الطالب',
+          morphology: 'noun',
+          case: 'genitive',
+          grammaticalRole: 'mudaf_ilayh',
+          type: 'root'
+        }
+      };
+
+      const question = await grammarQuizEngine.generateQuestion(sampleSegments);
+      
+      setState(prev => ({
+        ...prev,
+        quizState: {
+          ...prev.quizState,
+          currentQuestion: question,
+          isLoading: false,
+          isAnswered: false,
+          showFeedback: false,
+          userSelection: null
+        },
+        questionStartTime: Date.now(),
+        currentSelections: [],
+        activeSelectionId: null,
+        selectedIndices: [],
+        selectedConstructionType: null,
+        submittedConstructions: []
+      }));
+
+    } catch (error) {
+      console.error('Error loading question:', error);
+      setState(prev => ({
+        ...prev,
+        quizState: {
+          ...prev.quizState,
+          isLoading: false,
+          error: 'Failed to load question. Please try again.'
+        }
+      }));
+    }
+  }, [state.currentSession]);
+
+  // Word Selection
+  const toggleWordSelection = useCallback((index: number) => {
+    if (state.quizState.isAnswered || state.quizState.showFeedback) return;
+
+    setState(prev => {
+      const newIndices = prev.selectedIndices.includes(index)
+        ? prev.selectedIndices.filter(i => i !== index)
+        : [...prev.selectedIndices, index];
+
+      return {
+        ...prev,
+        selectedIndices: newIndices
+      };
+    });
+  }, [state.quizState.isAnswered, state.quizState.showFeedback]);
+
+  // Construction Type Selection
+  const selectConstructionType = useCallback((type: 'mudaf-mudaf-ilayh' | 'jar-majroor') => {
+    if (state.quizState.isAnswered || state.quizState.showFeedback) return;
+
+    setState(prev => ({
+      ...prev,
+      selectedConstructionType: type
+    }));
+  }, [state.quizState.isAnswered, state.quizState.showFeedback]);
+
+  // Submit current construction and continue selecting
+  const submitCurrentConstruction = useCallback(() => {
+    if (!state.currentSession || 
+        !state.quizState.currentQuestion || 
+        state.selectedIndices.length === 0 || 
+        !state.selectedConstructionType) {
+      return;
+    }
+
+    const constructionId = `construction-${Date.now()}`;
+    const responseTime = Date.now() - state.questionStartTime;
+    
+    const userSelection: UserSelection = {
+      selectedIndices: state.selectedIndices,
+      relationshipType: state.selectedConstructionType,
+      timestamp: new Date(),
+      selectionTimeMs: responseTime
+    };
+
+    const validation = grammarQuizEngine.validateAnswer(
+      state.quizState.currentQuestion,
+      userSelection
+    );
+
+    const newConstruction: MultiConstructionSelection = {
+      id: constructionId,
+      indices: state.selectedIndices,
+      constructionType: state.selectedConstructionType,
+      timestamp: new Date(),
+      isSubmitted: true,
+      validation
+    };
+
+    setState(prev => ({
+      ...prev,
+      submittedConstructions: [...prev.submittedConstructions, newConstruction],
+      selectedIndices: [],
+      selectedConstructionType: null,
+      activeSelectionId: null
+    }));
+
+    console.log(`📊 Construction submitted: ${validation.isCorrect ? 'correct' : 'incorrect'} (${state.selectedConstructionType})`);
+  }, [
+    state.currentSession,
+    state.quizState.currentQuestion,
+    state.selectedIndices,
+    state.selectedConstructionType,
+    state.questionStartTime
+  ]);
+
+  // Finalize all constructions for the question and move to feedback
+  const finalizeQuestion = useCallback(() => {
+    if (!state.currentSession || !state.quizState.currentQuestion) return;
+
+    // Create comprehensive validation for all submitted constructions
+    const allCorrect = state.submittedConstructions.every(c => c.validation?.isCorrect);
+    const totalConstructions = state.quizState.currentQuestion.correctAnswers.length;
+    const foundConstructions = state.submittedConstructions.length;
+
+    // Record overall question result
+    const overallValidation: AnswerValidation = {
+      isCorrect: allCorrect && foundConstructions >= totalConstructions,
+      partialCredit: foundConstructions / totalConstructions,
+      feedback: {
+        message: allCorrect && foundConstructions >= totalConstructions
+          ? 'Excellent! You found all grammatical constructions correctly.'
+          : `Found ${foundConstructions}/${totalConstructions} constructions. ${allCorrect ? 'All correct!' : 'Some incorrect.'}`,
+        explanation: `This verse contains ${totalConstructions} grammatical construction(s).`,
+        encouragement: allCorrect ? 'Great grammatical analysis!' : 'Keep practicing!'
+      },
+      highlightCorrect: state.submittedConstructions
+        .filter(c => c.validation?.isCorrect)
+        .flatMap(c => c.indices),
+      highlightIncorrect: state.submittedConstructions
+        .filter(c => !c.validation?.isCorrect)
+        .flatMap(c => c.indices)
+    };
+
+    currentValidation.current = overallValidation;
+
+    setState(prev => ({
+      ...prev,
+      quizState: {
+        ...prev.quizState,
+        isAnswered: true,
+        showFeedback: true
+      }
+    }));
+  }, [state.currentSession, state.quizState.currentQuestion, state.submittedConstructions]);
+
+  // Next Question
+  const nextQuestion = useCallback(() => {
+    if (!state.currentSession) return;
+
+    const currentQuestionNum = state.currentSession.questions.length;
+    const totalQuestions = state.currentSession.settings.questionCount;
+
+    if (currentQuestionNum >= totalQuestions) {
+      // Complete session
+      const completedSession = grammarQuizEngine.completeSession();
+      setState(prev => ({
+        ...prev,
+        currentSession: completedSession,
+        quizState: {
+          ...prev.quizState,
+          showFeedback: false,
+          progress: { current: totalQuestions, total: totalQuestions, percentage: 100 }
+        }
+      }));
+      return;
+    }
+
+    // Update progress and load next question
+    setState(prev => ({
+      ...prev,
+      quizState: {
+        ...prev.quizState,
+        showFeedback: false,
+        progress: {
+          current: currentQuestionNum + 1,
+          total: totalQuestions,
+          percentage: ((currentQuestionNum + 1) / totalQuestions) * 100
+        }
+      },
+      currentSelections: [],
+      activeSelectionId: null,
+      selectedIndices: [],
+      selectedConstructionType: null,
+      submittedConstructions: []
+    }));
+
+    loadNextQuestion();
+  }, [state.currentSession, loadNextQuestion]);
+
+  // Reset Quiz
+  const resetQuiz = useCallback(() => {
+    setState({
+      quizState: {
+        userSelection: null,
+        isAnswered: false,
+        showFeedback: false,
+        isLoading: false,
+        progress: { current: 0, total: 0, percentage: 0 }
+      },
+      currentSession: null,
+      questionStartTime: 0,
+      currentSelections: [],
+      activeSelectionId: null,
+      selectedIndices: [],
+      selectedConstructionType: null,
+      submittedConstructions: []
+    });
+    currentValidation.current = null;
+  }, []);
+
+  // Get current statistics
+  const getCurrentStatistics = useCallback(() => {
+    return grammarQuizEngine.getSessionStatistics();
+  }, []);
+
+  // Check if current construction can be submitted
+  const canSubmitConstruction = state.selectedIndices.length > 0 && 
+                               state.selectedConstructionType !== null && 
+                               !state.quizState.showFeedback;
+
+  // Check if question can be finalized
+  const canFinalizeQuestion = state.submittedConstructions.length > 0 && 
+                             !state.quizState.showFeedback;
+
+  // Check if session is completed
+  const isSessionCompleted = state.currentSession?.endTime !== undefined;
+
+  return {
+    // State
+    quizState: state.quizState,
+    currentSession: state.currentSession,
+    selectedIndices: state.selectedIndices,
+    selectedConstructionType: state.selectedConstructionType,
+    submittedConstructions: state.submittedConstructions,
+    currentValidation: currentValidation.current,
+    canSubmitConstruction,
+    canFinalizeQuestion,
+    isSessionCompleted,
+
+    // Actions
+    startSession,
+    toggleWordSelection,
+    selectConstructionType,
+    submitCurrentConstruction,
+    finalizeQuestion,
+    nextQuestion,
+    resetQuiz,
+    getCurrentStatistics,
+
+    // Helpers
+    getCurrentQuestionNumber: () => state.currentSession ? state.currentSession.questions.length + 1 : 0,
+    getProgress: () => state.quizState.progress,
+    getAllSelectedIndices: () => [
+      ...state.selectedIndices,
+      ...state.submittedConstructions.flatMap(c => c.indices)
+    ]
+  };
+}
