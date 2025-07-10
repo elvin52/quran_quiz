@@ -11,9 +11,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
-import { Link2, Crown } from 'lucide-react';
+import { Link2, Crown, Users, ArrowRight } from 'lucide-react';
+import { ConstructionType } from '@/types/grammarQuiz';
 
-type ConstructionType = 'mudaf-mudaf-ilayh' | 'jar-majroor';
+// Import the new construction types from the extended type definitions
 
 interface RelationshipSelectorProps {
   selectedType: ConstructionType | null;
@@ -54,6 +55,26 @@ const constructionOptions: ConstructionOption[] = [
     icon: <Link2 className="h-5 w-5" />,
     color: 'text-purple-700 dark:text-purple-300',
     bgColor: 'bg-purple-50 dark:bg-purple-900/20 border-purple-200 dark:border-purple-700'
+  },
+  {
+    type: 'fil-fail',
+    arabicName: 'فِعْل وفَاعِل',
+    englishName: 'Verb-Doer Construction',
+    description: 'A verb (فِعْل) and its subject/doer (فَاعِل). The doer performs the action described by the verb.',
+    examples: ['يَعْبُدُونَ اللَّهَ', 'نَزَلَ جِبْرِيلُ', 'صَلَّى النَّبِيُّ', 'قَرَأَ الطَّالِبُ'],
+    icon: <Users className="h-5 w-5" />,
+    color: 'text-blue-700 dark:text-blue-300',
+    bgColor: 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-700'
+  },
+  {
+    type: 'harf-nasb-ismuha',
+    arabicName: 'حَرْف نَصْب واسْمُهَا',
+    englishName: 'Accusative Particle Construction',
+    description: 'A particle that causes accusative case (حَرْف نَصْب) followed by the verb it governs (اسْمُهَا).',
+    examples: ['أَنْ يَعْبُدَ', 'لَنْ نُشْرِكَ', 'كَيْ تَفْهَمَ', 'لِكَيْ يَنْجَحَ'],
+    icon: <ArrowRight className="h-5 w-5" />,
+    color: 'text-green-700 dark:text-green-300',
+    bgColor: 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-700'
   }
 ];
 

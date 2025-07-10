@@ -9,18 +9,95 @@
 import { MorphologicalDetails } from './morphology';
 
 // Core Construction Types
-export type ConstructionType = 'mudaf-mudaf-ilayh' | 'jar-majroor';
+export type ConstructionType = 'mudaf-mudaf-ilayh' | 'jar-majroor' | 'fil-fail' | 'harf-nasb-ismuha';
+
+/**
+ * Classification of construction types by interaction model
+ */
+export type SimpleConstructionType = 'mudaf-mudaf-ilayh' | 'jar-majroor';
+export type RoleBasedConstructionType = 'fil-fail' | 'harf-nasb-ismuha';
+
+/**
+ * Steps in the role assignment process for role-based constructions
+ */
+export type RoleAssignmentStep = 
+  | 'selection'           // Initial word selection phase
+  | 'primary-selection'   // Selecting words for primary role (verb, naṣb particle)
+  | 'secondary-selection' // Selecting words for secondary role (doer, governed verb)
+  | 'complete';           // Role assignment complete
+
+/**
+ * Grammatical roles for role-based constructions
+ */
+export interface GrammaticalRole {
+  name: string;                    // e.g., 'fiʿl', 'fāʿil', 'harf-naṣb', 'ismuha'
+  description: string;             // Human-readable description
+  arabicName?: string;             // Arabic name for the role
+  morphologicalIndicators: string[]; // Morphological tags that suggest this role
+}
+
+/**
+ * Role-based relationship between words in Arabic grammar
+ */
+export interface RoleBasedRelationship {
+  id: string;
+  type: RoleBasedConstructionType;
+  primaryRole: GrammaticalRole;     // The governing element (Fiʿl, Harf Naṣb)
+  secondaryRole: GrammaticalRole;   // The governed element (Fāʿil, Ismuha)
+  primaryIndices: number[];         // Indices of words serving primary role
+  secondaryIndices: number[];       // Indices of words serving secondary role
+  certainty: 'definite' | 'probable' | 'inferred';
+  explanation: string;
+}
+
+/**
+ * Predefined grammatical roles for role-based constructions
+ */
+export const GRAMMATICAL_ROLES: Record<RoleBasedConstructionType, { primary: GrammaticalRole; secondary: GrammaticalRole }> = {
+  'fil-fail': {
+    primary: {
+      name: 'fiʿl',
+      description: 'Verb - the action or state',
+      arabicName: 'فِعْل',
+      morphologicalIndicators: ['IV', 'PV', 'VERB']
+    },
+    secondary: {
+      name: 'fāʿil',
+      description: 'Doer - the one who performs the action',
+      arabicName: 'فَاعِل',
+      morphologicalIndicators: ['NOUN', 'PRON', 'NOM']
+    }
+  },
+  'harf-nasb-ismuha': {
+    primary: {
+      name: 'harf-naṣb',
+      description: 'Particle of accusative - governs verbs in accusative',
+      arabicName: 'حَرْف نَصْب',
+      morphologicalIndicators: ['HARF_NASB', 'PART']
+    },
+    secondary: {
+      name: 'ismuha',
+      description: 'Governed verb - the verb governed by the particle',
+      arabicName: 'اسْمُهَا',
+      morphologicalIndicators: ['IMPERF', 'IV']
+    }
+  }
+};
 
 /**
  * Represents a grammatical construction in Arabic text
+ * Supports both simple constructions (Mudaf-Mudaf Ilayh, Jar-Majroor) and role-based constructions (Fiʿl-Fāʿil, Harf Naṣb-Ismuha)
  */
 export interface GrammarConstruction {
   id: string;
   type: ConstructionType;
   spans: number[];              // Word indices that form this construction
-  roles: string[];              // Grammatical role of each word
+  roles: string[];              // Grammatical role of each word (for simple constructions)
   certainty: 'definite' | 'probable' | 'inferred';
   explanation: string;
+  
+  // For role-based constructions
+  roleBasedRelationship?: RoleBasedRelationship;
 }
 
 /**
@@ -52,6 +129,7 @@ export interface GrammarQuizQuestion {
 
 /**
  * User's selection for construction identification
+ * Supports both simple constructions and multi-step role-based constructions
  */
 export interface UserSelection {
   selectedIndices: number[];                  // User-selected word positions (0-based)
@@ -59,6 +137,16 @@ export interface UserSelection {
   confidence?: number;                        // Optional user confidence level (1-5)
   timestamp: Date;
   selectionTimeMs: number;                   // Time taken to make selection
+  
+  // For role-based constructions - multi-step selection
+  roleBasedSelection?: {
+    step: 'primary-selection' | 'secondary-selection' | 'complete';
+    primaryIndices: number[];                 // Indices for primary role (Fiʿl, Harf Naṣb)
+    secondaryIndices: number[];               // Indices for secondary role (Fāʿil, Ismuha)
+    primaryRole?: string;                     // Selected primary role name
+    secondaryRole?: string;                   // Selected secondary role name
+    stepTimestamps: Date[];                   // Timestamp for each selection step
+  };
 }
 
 /**
@@ -145,6 +233,8 @@ export interface QuizStatistics {
   constructionTypeAccuracy: {
     'mudaf-mudaf-ilayh': number;
     'jar-majroor': number;
+    'fil-fail': number;
+    'harf-nasb-ismuha': number;
   };
   difficultyPerformance: {
     beginner: number;
@@ -152,6 +242,17 @@ export interface QuizStatistics {
     advanced: number;
   };
   improvementTrend: number;                 // Performance trend over session
+  
+  // Role-based construction statistics
+  roleBasedPerformance?: {
+    averageStepsToComplete: number;         // Average steps needed for role-based constructions
+    roleIdentificationAccuracy: number;     // Accuracy of role identification (primary/secondary)
+    mostConfusedRoles: string[];           // Roles users struggle with most
+    stepCompletionTimes: {
+      primarySelection: number;             // Average time for primary role selection
+      secondarySelection: number;           // Average time for secondary role selection
+    };
+  };
 }
 
 /**
@@ -160,12 +261,19 @@ export interface QuizStatistics {
 export interface QuizSettings {
   questionCount: number;                    // Number of questions per session
   difficulty: 'mixed' | 'beginner' | 'intermediate' | 'advanced';
-  constructionTypes: ('mudaf-mudaf-ilayh' | 'jar-majroor')[];
+  constructionTypes: ConstructionType[];   // All supported construction types
   timeLimit?: number;                       // Optional time limit in seconds
   hintsEnabled: boolean;
   immediateAnswers: boolean;                // Show answers immediately vs at end
   confidenceTracking: boolean;             // Ask user for confidence ratings
   retryIncorrect: boolean;                  // Allow retry of incorrect answers
+  
+  // Role-based construction settings
+  roleBasedSettings?: {
+    enableMultiStepSelection: boolean;      // Enable step-by-step role selection
+    showRoleHints: boolean;                 // Show morphological hints for roles
+    allowRoleCorrection: boolean;           // Allow users to correct role assignments
+  };
 }
 
 /**

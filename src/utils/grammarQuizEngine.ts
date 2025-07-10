@@ -12,13 +12,14 @@ import {
   GrammarQuizQuestion,
   GrammarConstruction,
   UserSelection,
-  AnswerValidation,
+  ConstructionValidation,
   QuizGenerationConfig,
   GrammarQuizSession,
   QuizSettings,
   QuestionResult,
   QuizStatistics
 } from '@/types/grammarQuiz';
+import { roleBasedSampleQuestions, RoleBasedQuestionGenerator } from '../data/sampleRoleBasedQuestions';
 import { surahData } from '@/data/surahData';
 
 export class GrammarQuizEngine {
@@ -107,6 +108,24 @@ export class GrammarQuizEngine {
     if (segment.morphology === 'verb') return 'verb';
     if (segment.morphology === 'adjective') return 'adjective';
     return 'unknown';
+  }
+
+  /**
+   * Start a new quiz session
+   */
+  startSession(settings: QuizSettings): GrammarQuizSession {
+    console.log('🎯 Starting Grammar Quiz session');
+    
+    const session: GrammarQuizSession = {
+      id: `grammar-session-${Date.now()}`,
+      startTime: new Date(),
+      settings,
+      questions: [],
+      statistics: this.initializeStatistics()
+    };
+
+    this.currentSession = session;
+    return session;
   }
 
   /**
@@ -261,10 +280,15 @@ export class GrammarQuizEngine {
   validateAnswer(
     question: GrammarQuizQuestion,
     userSelection: UserSelection
-  ): AnswerValidation {
+  ): ConstructionValidation {
     console.log('🔍 Validating user answer...');
     
-    const { selectedIndices, relationshipType } = userSelection;
+    const { selectedIndices, relationshipType, roleBasedSelection } = userSelection;
+    
+    // Handle role-based constructions (Fiʿl-Fāʿil, Harf Naṣb-Ismuha)
+    if (roleBasedSelection && (relationshipType === 'fil-fail' || relationshipType === 'harf-nasb-ismuha')) {
+      return this.validateRoleBasedAnswer(question, userSelection);
+    }
     
     // Find matching constructions of the selected type
     const relevantConstructions = question.correctAnswers.filter(
@@ -273,15 +297,28 @@ export class GrammarQuizEngine {
     
     if (relevantConstructions.length === 0) {
       return {
+        constructionId: 'no-construction-found',
         isCorrect: false,
-        partialCredit: 0,
+        userAnswer: {
+          constructionId: 'user-answer',
+          selectedIndices,
+          selectedType: relationshipType,
+          timestamp: Date.now()
+        },
+        correctAnswer: {
+          id: 'no-correct-answer',
+          type: relationshipType,
+          spans: [],
+          roles: [],
+          certainty: 'inferred',
+          explanation: 'No construction found'
+        },
         feedback: {
           message: `No ${this.formatConstructionType(relationshipType)} constructions found in this fragment.`,
           explanation: 'Try selecting a different relationship type or different words.',
-          corrections: [`Look for ${relationshipType === 'mudaf-mudaf-ilayh' ? 'possessive' : 'prepositional'} constructions`]
+          encouragement: `Look for ${relationshipType === 'mudaf-mudaf-ilayh' ? 'possessive' : 'prepositional'} constructions`
         },
-        highlightCorrect: [],
-        highlightIncorrect: selectedIndices
+        score: 0
       };
     }
     
@@ -292,16 +329,21 @@ export class GrammarQuizEngine {
     
     if (exactMatch) {
       return {
+        constructionId: exactMatch.id,
         isCorrect: true,
-        partialCredit: 1.0,
-        matchedConstruction: exactMatch,
+        userAnswer: {
+          constructionId: exactMatch.id,
+          selectedIndices: userSelection.selectedIndices,
+          selectedType: userSelection.relationshipType,
+          timestamp: Date.now()
+        },
+        correctAnswer: exactMatch,
         feedback: {
           message: '🎉 Excellent! Perfect identification.',
           explanation: exactMatch.explanation,
           encouragement: 'You correctly identified the grammatical construction!'
         },
-        highlightCorrect: selectedIndices,
-        highlightIncorrect: []
+        score: 100
       };
     }
     
@@ -310,55 +352,222 @@ export class GrammarQuizEngine {
     
     if (partialMatch.score > 0.3) {
       return {
+        constructionId: partialMatch.construction.id,
         isCorrect: false,
-        partialCredit: partialMatch.score,
-        matchedConstruction: partialMatch.construction,
-        feedback: {
-          message: `🔶 Partially correct! You identified ${Math.round(partialMatch.score * 100)}% of the construction.`,
-          explanation: partialMatch.construction.explanation,
-          corrections: this.generateCorrections(partialMatch.construction, selectedIndices)
+        userAnswer: {
+          constructionId: partialMatch.construction.id,
+          selectedIndices: userSelection.selectedIndices,
+          selectedType: userSelection.relationshipType,
+          timestamp: Date.now()
         },
-        highlightCorrect: this.intersection(partialMatch.construction.spans, selectedIndices),
-        highlightIncorrect: this.difference(selectedIndices, partialMatch.construction.spans)
+        correctAnswer: partialMatch.construction,
+        feedback: {
+          message: `🔶 Partially correct! ${Math.round(partialMatch.score * 100)}% accuracy.`,
+          explanation: partialMatch.construction.explanation,
+          encouragement: 'Review the highlighted words and their relationships.'
+        },
+        score: Math.round(partialMatch.score * 70)
       };
     }
     
     // Incorrect answer - provide helpful feedback
     const bestConstruction = relevantConstructions[0];
     return {
+      constructionId: bestConstruction.id,
       isCorrect: false,
-      partialCredit: 0,
+      userAnswer: {
+        constructionId: 'user-answer',
+        selectedIndices,
+        selectedType: relationshipType,
+        timestamp: Date.now()
+      },
+      correctAnswer: bestConstruction,
       feedback: {
         message: '❌ Incorrect selection.',
         explanation: `The correct ${this.formatConstructionType(relationshipType)} construction is: ${bestConstruction.explanation}`,
         corrections: [`Select words at positions: ${bestConstruction.spans.map(i => question.segments[i].text).join(' + ')}`]
       },
-      highlightCorrect: bestConstruction.spans,
-      highlightIncorrect: this.difference(selectedIndices, bestConstruction.spans)
+      score: 0
     };
   }
 
   /**
-   * Start a new quiz session
+   * Validate role-based constructions (Fiʿl-Fāʿil, Harf Naṣb-Ismuha)
    */
-  startSession(settings: QuizSettings): GrammarQuizSession {
-    console.log('🎯 Starting new grammar quiz session');
+  private validateRoleBasedAnswer(
+    question: GrammarQuizQuestion,
+    userSelection: UserSelection
+  ): ConstructionValidation {
+    console.log('🔍 Validating role-based construction answer...');
     
-    const session: GrammarQuizSession = {
-      sessionId: `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      startTime: new Date(),
-      questions: [],
-      currentQuestionIndex: 0,
-      statistics: this.initializeStatistics(),
-      settings,
-      metadata: {
-        version: '1.0.0',
-        totalPauseTimeMs: 0
+    const { relationshipType, roleBasedSelection } = userSelection;
+    
+    if (!roleBasedSelection) {
+      return this.createValidationError('Missing role-based selection data', relationshipType);
+    }
+    
+    // Find relevant constructions of this type
+    const relevantConstructions = question.correctAnswers.filter(
+      c => c.type === relationshipType
+    );
+    
+    if (relevantConstructions.length === 0) {
+      return this.createValidationError(`No ${relationshipType} constructions found`, relationshipType);
+    }
+    
+    // Check if both primary and secondary roles are selected
+    if (roleBasedSelection.step !== 'complete' || 
+        roleBasedSelection.primaryIndices.length === 0 || 
+        roleBasedSelection.secondaryIndices.length === 0) {
+      return this.createValidationError('Incomplete role selection', relationshipType);
+    }
+    
+    // Validate role assignments against correct constructions
+    const bestMatch = this.findBestRoleMatch(relevantConstructions, roleBasedSelection);
+    
+    if (bestMatch.score >= 0.8) {
+      return {
+        constructionId: bestMatch.construction.id,
+        isCorrect: true,
+        userAnswer: {
+          constructionId: 'role-based-answer',
+          selectedIndices: [...roleBasedSelection.primaryIndices, ...roleBasedSelection.secondaryIndices],
+          selectedType: relationshipType,
+          timestamp: Date.now()
+        },
+        correctAnswer: bestMatch.construction,
+        feedback: {
+          message: '🎉 Excellent! Perfect role identification.',
+          explanation: bestMatch.construction.explanation,
+          encouragement: 'You correctly identified both grammatical roles!'
+        },
+        score: 100
+      };
+    } else if (bestMatch.score > 0.3) {
+      return {
+        constructionId: bestMatch.construction.id,
+        isCorrect: false,
+        userAnswer: {
+          constructionId: 'role-based-answer',
+          selectedIndices: [...roleBasedSelection.primaryIndices, ...roleBasedSelection.secondaryIndices],
+          selectedType: relationshipType,
+          timestamp: Date.now()
+        },
+        correctAnswer: bestMatch.construction,
+        feedback: {
+          message: `🔶 Partially correct! ${Math.round(bestMatch.score * 100)}% accuracy.`,
+          explanation: bestMatch.construction.explanation,
+          encouragement: 'Review the roles and their relationships.'
+        },
+        score: Math.round(bestMatch.score * 70)
+      };
+    } else {
+      return {
+        constructionId: bestMatch.construction.id,
+        isCorrect: false,
+        userAnswer: {
+          constructionId: 'role-based-answer',
+          selectedIndices: [...roleBasedSelection.primaryIndices, ...roleBasedSelection.secondaryIndices],
+          selectedType: relationshipType,
+          timestamp: Date.now()
+        },
+        correctAnswer: bestMatch.construction,
+        feedback: {
+          message: '❌ Incorrect role assignment.',
+          explanation: bestMatch.construction.explanation,
+          encouragement: 'Focus on identifying the verb-subject or particle-noun relationships.'
+        },
+        score: 0
+      };
+    }
+  }
+
+  /**
+   * Find best matching role-based construction
+   */
+  private findBestRoleMatch(
+    constructions: GrammarConstruction[],
+    roleSelection: NonNullable<UserSelection['roleBasedSelection']>
+  ): { construction: GrammarConstruction; score: number } {
+    let bestMatch = { construction: constructions[0], score: 0 };
+    
+    for (const construction of constructions) {
+      const score = this.calculateRoleMatchScore(construction, roleSelection);
+      if (score > bestMatch.score) {
+        bestMatch = { construction, score };
       }
-    };
+    }
     
-    this.currentSession = session;
-    return session;
+    return bestMatch;
+  }
+
+  /**
+   * Calculate role matching score
+   */
+  private calculateRoleMatchScore(
+    construction: GrammarConstruction,
+    roleSelection: NonNullable<UserSelection['roleBasedSelection']>
+  ): number {
+    // For role-based constructions, use roleBasedRelationship property
+    if (!construction.roleBasedRelationship) {
+      // Fallback: use spans array for simple matching
+      const allUserIndices = [...roleSelection.primaryIndices, ...roleSelection.secondaryIndices].sort();
+      const constructionSpans = construction.spans.sort();
+      return this.arraysEqual(allUserIndices, constructionSpans) ? 1.0 : 0.0;
+    }
+    
+    const { primaryIndices, secondaryIndices } = construction.roleBasedRelationship;
+    
+    // Check if user selections match the correct role spans
+    const primaryMatch = this.arraysEqual(
+      roleSelection.primaryIndices.sort(),
+      primaryIndices.sort()
+    );
+    const secondaryMatch = this.arraysEqual(
+      roleSelection.secondaryIndices.sort(),
+      secondaryIndices.sort()
+    );
+    
+    if (primaryMatch && secondaryMatch) return 1.0;
+    if (primaryMatch || secondaryMatch) return 0.6;
+    
+    // Partial overlap scoring
+    const primaryOverlap = primaryIndices.length > 0 ? 
+      this.intersection(roleSelection.primaryIndices, primaryIndices).length / primaryIndices.length : 0;
+    const secondaryOverlap = secondaryIndices.length > 0 ? 
+      this.intersection(roleSelection.secondaryIndices, secondaryIndices).length / secondaryIndices.length : 0;
+    
+    return (primaryOverlap + secondaryOverlap) / 2;
+  }
+
+  /**
+   * Create validation error response
+   */
+  private createValidationError(message: string, relationshipType: string): ConstructionValidation {
+    return {
+      constructionId: 'validation-error',
+      isCorrect: false,
+      userAnswer: {
+        constructionId: 'error-answer',
+        selectedIndices: [],
+        selectedType: relationshipType as any,
+        timestamp: Date.now()
+      },
+      correctAnswer: {
+        id: 'error-construction',
+        type: relationshipType as any,
+        spans: [],
+        roles: [],
+        certainty: 'inferred',
+        explanation: 'Validation error'
+      },
+      feedback: {
+        message,
+        explanation: 'Please complete the role selection process.',
+        encouragement: 'Try again with proper role assignments.'
+      },
+      score: 0
+    };
   }
 
   /**
@@ -366,8 +575,7 @@ export class GrammarQuizEngine {
    */
   recordAnswer(
     questionId: string,
-    userSelection: UserSelection,
-    validation: AnswerValidation,
+    validation: ConstructionValidation,
     responseTimeMs: number
   ): void {
     if (!this.currentSession) {
@@ -382,8 +590,8 @@ export class GrammarQuizEngine {
     const result: QuestionResult = {
       questionId,
       fragment: question.fragment,
-      userSelection,
-      correctAnswers: question.correctAnswers,
+      userAnswer: validation.userAnswer,
+      correctConstructions: question.correctAnswers,
       validation,
       responseTimeMs,
       attemptsCount: 1,
@@ -468,8 +676,7 @@ export class GrammarQuizEngine {
       spans: [mudafIndex, mudafIlayhIndex].filter(i => i !== -1),
       roles: ['mudaf', 'mudaf-ilayh'],
       certainty: idafa.certainty,
-      explanation: `"${idafa.mudaf.text}" (mudaf) is in possessive relationship with "${idafa.mudafIlayh.text}" (mudaf ilayh). ${idafa.textbookRule}`,
-      textbookRule: idafa.textbookRule
+      explanation: `"${idafa.mudaf.text}" (mudaf) is in possessive relationship with "${idafa.mudafIlayh.text}" (mudaf ilayh).`
     };
   }
 
@@ -522,7 +729,7 @@ export class GrammarQuizEngine {
     
     return {
       id: `mawsoof_sifah_${index}`,
-      type: 'mawsoof-sifah',
+      type: 'mudaf-mudaf-ilayh', // Fixed: using valid ConstructionType
       spans: [mawsoofIndex, sifahIndex].filter(i => i !== -1),
       roles: ['mawsoof', 'sifah'],
       certainty: 'definite',
@@ -561,7 +768,7 @@ export class GrammarQuizEngine {
     
     return {
       id: `fi3l_fa3il_${index}`,
-      type: 'fi3l-fa3il',
+      type: 'fil-fail',
       spans: [fi3lIndex, fa3ilIndex].filter(i => i !== -1),
       roles: ['fi3l', 'fa3il'],
       certainty: 'definite',
@@ -645,8 +852,8 @@ export class GrammarQuizEngine {
       constructionTypeAccuracy: {
         'mudaf-mudaf-ilayh': 0,
         'jar-majroor': 0,
-        'mawsoof-sifah': 0,
-        'fi3l-fa3il': 0
+        'fil-fail': 0,
+        'harf-nasb-ismuha': 0
       },
       difficultyPerformance: {
         beginner: 0,
@@ -665,15 +872,15 @@ export class GrammarQuizEngine {
       totalQuestions: results.length,
       answeredQuestions: results.length,
       correctAnswers: results.filter(r => r.validation.isCorrect).length,
-      partialCorrectAnswers: results.filter(r => r.validation.partialCredit > 0 && !r.validation.isCorrect).length,
+      partialCorrectAnswers: results.filter(r => r.validation.score > 0 && r.validation.score < 100).length,
       accuracy: results.length > 0 ? results.filter(r => r.validation.isCorrect).length / results.length : 0,
       averageResponseTimeMs: results.length > 0 ? 
         results.reduce((sum, r) => sum + r.responseTimeMs, 0) / results.length : 0,
       constructionTypeAccuracy: {
         'mudaf-mudaf-ilayh': this.calculateTypeAccuracy(results, 'mudaf-mudaf-ilayh'),
         'jar-majroor': this.calculateTypeAccuracy(results, 'jar-majroor'),
-        'mawsoof-sifah': this.calculateTypeAccuracy(results, 'mawsoof-sifah'),
-        'fi3l-fa3il': this.calculateTypeAccuracy(results, 'fi3l-fa3il')
+        'fil-fail': this.calculateTypeAccuracy(results, 'fil-fail'),
+        'harf-nasb-ismuha': this.calculateTypeAccuracy(results, 'harf-nasb-ismuha')
       },
       difficultyPerformance: {
         beginner: this.calculateDifficultyAccuracy(results, 'beginner'),

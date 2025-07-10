@@ -16,7 +16,9 @@ import {
   QuizState,
   QuestionResult,
   GrammarConstruction,
-  ConstructionType
+  ConstructionType,
+  RoleBasedConstructionType,
+  RoleAssignmentStep
 } from '@/types/grammarQuiz';
 import { grammarQuizEngine } from '@/utils/grammarQuizEngine';
 import { MorphologicalDetails } from '@/types/morphology';
@@ -33,6 +35,10 @@ interface GrammarQuizManagerState {
   selectedConstructionType: ConstructionType | null; // Selected construction type
   submittedConstructions: SubmittedConstruction[]; // All submitted constructions for current question
   currentValidation: ConstructionValidation | null; // Current answer validation
+  // Role-based construction state
+  roleAssignmentStep: RoleAssignmentStep;
+  primaryRoleIndices: number[]; // Indices for primary role (e.g., verb, naṣb particle)
+  secondaryRoleIndices: number[]; // Indices for secondary role (e.g., doer, governed verb)
 }
 
 /**
@@ -59,7 +65,10 @@ export function useGrammarQuizManager() {
     selectedIndices: [],
     selectedConstructionType: null,
     submittedConstructions: [],
-    currentValidation: null
+    currentValidation: null,
+    roleAssignmentStep: 'selection',
+    primaryRoleIndices: [],
+    secondaryRoleIndices: []
   });
 
   // Use a ref to track current validation to avoid stale closures
@@ -199,12 +208,10 @@ export function useGrammarQuizManager() {
       userSelection
     );
 
-    const newConstruction: MultiConstructionSelection = {
+    const newConstruction: SubmittedConstruction = {
       id: constructionId,
       indices: state.selectedIndices,
       constructionType: state.selectedConstructionType,
-      timestamp: new Date(),
-      isSubmitted: true,
       validation
     };
 
@@ -234,10 +241,24 @@ export function useGrammarQuizManager() {
     const totalConstructions = state.quizState.currentQuestion.correctAnswers.length;
     const foundConstructions = state.submittedConstructions.length;
 
-    // Record overall question result
-    const overallValidation: AnswerValidation = {
+    // Record overall question result - simplified for demo, would be more detailed in production
+    const overallValidation: ConstructionValidation = {
+      constructionId: 'overall-question-validation',
       isCorrect: allCorrect && foundConstructions >= totalConstructions,
-      partialCredit: foundConstructions / totalConstructions,
+      userAnswer: {
+        constructionId: 'overall-question-validation',
+        selectedIndices: state.submittedConstructions.flatMap(c => c.indices),
+        selectedType: state.submittedConstructions[0]?.constructionType || 'mudaf-mudaf-ilayh',
+        timestamp: Date.now()
+      },
+      correctAnswer: state.quizState.currentQuestion.correctAnswers[0] || {
+        id: 'demo-construction',
+        type: 'mudaf-mudaf-ilayh',
+        spans: [],
+        roles: [],
+        certainty: 'definite',
+        explanation: 'Demo construction for validation'
+      },
       feedback: {
         message: allCorrect && foundConstructions >= totalConstructions
           ? 'Excellent! You found all grammatical constructions correctly.'
@@ -245,12 +266,7 @@ export function useGrammarQuizManager() {
         explanation: `This verse contains ${totalConstructions} grammatical construction(s).`,
         encouragement: allCorrect ? 'Great grammatical analysis!' : 'Keep practicing!'
       },
-      highlightCorrect: state.submittedConstructions
-        .filter(c => c.validation?.isCorrect)
-        .flatMap(c => c.indices),
-      highlightIncorrect: state.submittedConstructions
-        .filter(c => !c.validation?.isCorrect)
-        .flatMap(c => c.indices)
+      score: allCorrect && foundConstructions >= totalConstructions ? 100 : Math.round((foundConstructions / totalConstructions) * 70)
     };
 
     currentValidation.current = overallValidation;
@@ -321,11 +337,13 @@ export function useGrammarQuizManager() {
       },
       currentSession: null,
       questionStartTime: 0,
-      currentSelections: [],
-      activeSelectionId: null,
       selectedIndices: [],
       selectedConstructionType: null,
-      submittedConstructions: []
+      submittedConstructions: [],
+      currentValidation: null,
+      roleAssignmentStep: 'selection',
+      primaryRoleIndices: [],
+      secondaryRoleIndices: []
     });
     currentValidation.current = null;
   }, []);
