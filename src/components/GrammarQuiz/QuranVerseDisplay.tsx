@@ -114,14 +114,14 @@ export function QuranVerseDisplay({
             // Normalize Arabic characters and clean diacritics
             const normalizeArabic = (text: string) => {
               return text
-                // Normalize Alef variants: ٱ → ا, آ → ا, أ → ا, إ → ا
-                .replace(/[ٱآأإ]/g, 'ا')
+                // Normalize Alef variants: ٱ → ا, آ → ا, أ → ا, إ → ا, ٰ → ا
+                .replace(/[ٱآأإٰ]/g, 'ا')
                 // Normalize Teh Marbuta: ة → ه
                 .replace(/ة/g, 'ه')
                 // Normalize Yeh variants: ي → ى, ئ → ى
                 .replace(/[يئ]/g, 'ى')
-                // Remove diacritics (comprehensive list)
-                .replace(/[ًٌٍَُِّْٰٕٖٜٟٓٔٗ٘ٙٚٛٝٞۖۗۘۙۚۛۜ۝۞ۣ۪ۭ۟۠ۡۢۤۧۨ۫۬]/g, '')
+                // Remove decorative diacritics only (excluding Alef Superscript which is now converted above)
+                .replace(/[ًٌٍَُِّْٕٖٜٟٓٔٗ٘ٙٚٛٝٞۖۗۘۙۚۛۜ۝۞ۣ۪ۭ۟۠ۡۢۤۧۨ۫۬]/g, '')
                 .trim();
             };
             
@@ -168,14 +168,14 @@ export function QuranVerseDisplay({
               // Normalize Arabic characters and clean diacritics
               const normalizeArabic = (text: string) => {
                 return text
-                  // Normalize Alef variants: ٱ → ا, آ → ا, أ → ا, إ → ا
-                  .replace(/[ٱآأإ]/g, 'ا')
+                  // Normalize Alef variants: ٱ → ا, آ → ا, أ → ا, إ → ا, ٰ → ا
+                  .replace(/[ٱآأإٰ]/g, 'ا')
                   // Normalize Teh Marbuta: ة → ه
                   .replace(/ة/g, 'ه')
                   // Normalize Yeh variants: ي → ى, ئ → ى
                   .replace(/[يئ]/g, 'ى')
-                  // Remove diacritics (comprehensive list)
-                  .replace(/[ًٌٍَُِّْٰٕٖٜٟٓٔٗ٘ٙٚٛٝٞۖۗۘۙۚۛۜ۝۞ۣ۪ۭ۟۠ۡۢۤۧۨ۫۬]/g, '')
+                  // Remove decorative diacritics only (excluding Alef Superscript which is now converted above)
+                  .replace(/[ًٌٍَُِّْٕٖٜٟٓٔٗ٘ٙٚٛٝٞۖۗۘۙۚۛۜ۝۞ۣ۪ۭ۟۠ۡۢۤۧۨ۫۬]/g, '')
                   .trim();
               };
               
@@ -485,22 +485,62 @@ export function QuranVerseDisplay({
       {!showFeedback && !disabled && selectedIndices.length > 0 && (
         <div className="text-center text-sm">
           <div className="flex justify-center items-center gap-2 text-blue-600 dark:text-blue-400">
-            <span>{selectedIndices.length} word{selectedIndices.length !== 1 ? 's' : ''} selected</span>
+            <span>{(() => {
+              // Count unique aggregated words selected, not individual segments
+              const processedSegments = processSegments(segments);
+              const selectedAggregatedWords = new Set();
+              
+              // Check which aggregated words contain any selected segments
+              processedSegments.forEach((aggSeg, aggIndex) => {
+                const originalIndices = getOriginalIndicesForProcessed(aggIndex);
+                if (originalIndices.some(idx => selectedIndices.includes(idx))) {
+                  selectedAggregatedWords.add(aggSeg.text);
+                }
+              });
+              
+              const count = selectedAggregatedWords.size;
+              return `${count} word${count !== 1 ? 's' : ''} selected`;
+            })()}</span>
             <div className="flex gap-1">
-              {selectedIndices.map((idx, order) => (
-                <Badge 
-                  key={idx} 
-                  variant="outline" 
-                  className={cn(
-                    'text-xs',
-                    (order + 1) % 2 === 1 
-                      ? 'border-yellow-500 text-yellow-700' 
-                      : 'border-teal-500 text-teal-700'
-                  )}
-                >
-                  {segments[idx].text}
-                </Badge>
-              ))}
+              {(() => {
+                // Show the actual aggregated words that were selected
+                const processedSegments = processSegments(segments);
+                const selectedWords: { text: string, order: number }[] = [];
+                
+                processedSegments.forEach((aggSeg, aggIndex) => {
+                  const originalIndices = getOriginalIndicesForProcessed(aggIndex);
+                  const selectedOriginalIndices = originalIndices.filter(idx => selectedIndices.includes(idx));
+                  
+                  if (selectedOriginalIndices.length > 0) {
+                    // Get the selection order of the first selected segment in this word
+                    const firstSelectedIndex = Math.min(...selectedOriginalIndices);
+                    const selectionOrder = selectedIndices.indexOf(firstSelectedIndex);
+                    
+                    selectedWords.push({
+                      text: aggSeg.text,
+                      order: selectionOrder
+                    });
+                  }
+                });
+                
+                // Sort by selection order to maintain click sequence
+                selectedWords.sort((a, b) => a.order - b.order);
+                
+                return selectedWords.map((word, displayIndex) => (
+                  <Badge 
+                    key={`${word.text}-${word.order}`}
+                    variant="outline" 
+                    className={cn(
+                      'text-xs',
+                      (displayIndex + 1) % 2 === 1 
+                        ? 'border-yellow-500 text-yellow-700' 
+                        : 'border-teal-500 text-teal-700'
+                    )}
+                  >
+                    {word.text}
+                  </Badge>
+                ));
+              })()}
             </div>
           </div>
         </div>
