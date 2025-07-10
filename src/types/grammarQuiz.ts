@@ -1,24 +1,26 @@
 /**
- * Type definitions for the Grammar Construction Quiz feature
+ * Grammar Construction Quiz Types
  * 
- * This quiz teaches users to identify Arabic grammatical constructions:
- * - Mudaf–Mudaf Ilayh (إضافة) - Possessive/genitive constructions
- * - Jar–Majroor (حرف جر والمجرور) - Prepositional phrases
+ * Type definitions for the Grammar Construction Quiz feature.
+ * Focuses on identifying Arabic grammatical constructions like Mudaf-Mudaf Ilayh and Jar-Majroor.
+ * Follows existing patterns from quranQuiz.ts for consistency.
  */
 
 import { MorphologicalDetails } from './morphology';
 
+// Core Construction Types
+export type ConstructionType = 'mudaf-mudaf-ilayh' | 'jar-majroor';
+
 /**
- * Represents a grammatical construction within a text fragment
+ * Represents a grammatical construction in Arabic text
  */
 export interface GrammarConstruction {
   id: string;
-  type: 'mudaf-mudaf-ilayh' | 'jar-majroor';
+  type: ConstructionType;
   spans: number[];              // Word indices that form this construction
-  roles: string[];              // Grammatical role of each word (mudaf, mudaf-ilayh, jar, majroor)
+  roles: string[];              // Grammatical role of each word
   certainty: 'definite' | 'probable' | 'inferred';
-  explanation: string;          // Detailed grammatical explanation
-  textbookRule?: string;        // Reference to grammatical rule
+  explanation: string;
 }
 
 /**
@@ -49,31 +51,46 @@ export interface GrammarQuizQuestion {
 }
 
 /**
- * User's selection for a quiz question
+ * User's selection for construction identification
  */
 export interface UserSelection {
   selectedIndices: number[];                  // User-selected word positions (0-based)
-  relationshipType: 'mudaf-mudaf-ilayh' | 'jar-majroor';
+  relationshipType: ConstructionType;
   confidence?: number;                        // Optional user confidence level (1-5)
   timestamp: Date;
   selectionTimeMs: number;                   // Time taken to make selection
 }
 
 /**
+ * User's answer for a grammatical construction in a quiz question
+ */
+export interface ConstructionAnswer {
+  constructionId: string;
+  selectedIndices: number[];     // User-selected word indices
+  selectedType: ConstructionType;
+  timestamp: number;
+}
+
+/**
+ * Validation feedback for user answers
+ */
+export interface ValidationFeedback {
+  message: string;                         // Main feedback message
+  explanation: string;                     // Detailed grammatical explanation
+  corrections?: string[];                  // Specific corrections needed
+  encouragement?: string;                  // Positive reinforcement
+}
+
+/**
  * Result of validating a user's answer
  */
-export interface AnswerValidation {
+export interface ConstructionValidation {
+  constructionId: string;
   isCorrect: boolean;
-  partialCredit: number;                     // 0-1 score for partial correctness
-  matchedConstruction?: GrammarConstruction; // Which construction the user matched
-  feedback: {
-    message: string;                         // Main feedback message
-    explanation: string;                     // Detailed grammatical explanation
-    corrections?: string[];                  // Specific corrections needed
-    encouragement?: string;                  // Positive reinforcement
-  };
-  highlightCorrect: number[];               // Indices to highlight as correct
-  highlightIncorrect: number[];             // Indices to highlight as incorrect
+  userAnswer: ConstructionAnswer;
+  correctAnswer: GrammarConstruction;
+  feedback: ValidationFeedback;
+  score: number;                // 0-100 based on accuracy
 }
 
 /**
@@ -82,9 +99,9 @@ export interface AnswerValidation {
 export interface QuestionResult {
   questionId: string;
   fragment: string;
-  userSelection: UserSelection;
-  correctAnswers: GrammarConstruction[];
-  validation: AnswerValidation;
+  userAnswer: ConstructionAnswer;
+  correctConstructions: GrammarConstruction[];
+  validation: ConstructionValidation;
   responseTimeMs: number;                   // Total time spent on question
   attemptsCount: number;                    // Number of attempts (for retry feature)
   timestamp: Date;

@@ -162,6 +162,26 @@ export class GrammarQuizEngine {
         constructions.push(construction);
       });
       
+      // Extract Mawsoof-Sifah relationships (الموصوف والصفة) from enhanced segments
+      const mawsoofSifahRelationships = this.extractMawsoofSifahRelationships(enhancedSegments);
+      console.log(`Found ${mawsoofSifahRelationships.length} Mawsoof-Sifah relationships`);
+      
+      // Add Mawsoof-Sifah constructions
+      mawsoofSifahRelationships.forEach((relationship, index) => {
+        const construction = this.convertMawsoofSifahToConstruction(relationship, segmentArray, index);
+        constructions.push(construction);
+      });
+      
+      // Extract Fi3l-Fa3il relationships (الفعل والفاعل) from enhanced segments
+      const fi3lFa3ilRelationships = this.extractFi3lFa3ilRelationships(enhancedSegments);
+      console.log(`Found ${fi3lFa3ilRelationships.length} Fi3l-Fa3il relationships`);
+      
+      // Add Fi3l-Fa3il constructions
+      fi3lFa3ilRelationships.forEach((relationship, index) => {
+        const construction = this.convertFi3lFa3ilToConstruction(relationship, segmentArray, index);
+        constructions.push(construction);
+      });
+      
     } catch (error) {
       console.warn('Error detecting constructions:', error);
     }
@@ -418,8 +438,8 @@ export class GrammarQuizEngine {
     const relationships: Array<{ jar: MorphologicalDetails; majroor: MorphologicalDetails }> = [];
     
     Object.values(enhancedSegments).forEach(segment => {
-      if (segment.grammaticalRelationships) {
-        segment.grammaticalRelationships.forEach(rel => {
+      if (segment.relationships) {
+        segment.relationships.forEach(rel => {
           if (rel.type === 'jar-majrur' && rel.role === 'jar') {
             const majroorSegment = enhancedSegments[rel.relatedSegmentId];
             if (majroorSegment) {
@@ -468,6 +488,84 @@ export class GrammarQuizEngine {
       roles: ['jar', 'majroor'],
       certainty: 'definite',
       explanation: `"${relationship.jar.text}" (preposition) governs "${relationship.majroor.text}" (object) in genitive case.`
+    };
+  }
+
+  private extractMawsoofSifahRelationships(
+    enhancedSegments: Record<string, MorphologicalDetails>
+  ): Array<{ mawsoof: MorphologicalDetails; sifah: MorphologicalDetails }> {
+    const relationships: Array<{ mawsoof: MorphologicalDetails; sifah: MorphologicalDetails }> = [];
+    
+    Object.values(enhancedSegments).forEach(segment => {
+      if (segment.relationships) {
+        segment.relationships.forEach(rel => {
+          if (rel.type === 'mawsoof-sifah' && rel.role === 'mawsoof') {
+            const sifahSegment = enhancedSegments[rel.relatedSegmentId];
+            if (sifahSegment) {
+              relationships.push({ mawsoof: segment, sifah: sifahSegment });
+            }
+          }
+        });
+      }
+    });
+    
+    return relationships;
+  }
+
+  private convertMawsoofSifahToConstruction(
+    relationship: { mawsoof: MorphologicalDetails; sifah: MorphologicalDetails },
+    segments: MorphologicalDetails[],
+    index: number
+  ): GrammarConstruction {
+    const mawsoofIndex = segments.findIndex(s => s.id === relationship.mawsoof.id);
+    const sifahIndex = segments.findIndex(s => s.id === relationship.sifah.id);
+    
+    return {
+      id: `mawsoof_sifah_${index}`,
+      type: 'mawsoof-sifah',
+      spans: [mawsoofIndex, sifahIndex].filter(i => i !== -1),
+      roles: ['mawsoof', 'sifah'],
+      certainty: 'definite',
+      explanation: `"${relationship.mawsoof.text}" (موصوف) is described by "${relationship.sifah.text}" (صفة) with full grammatical agreement.`
+    };
+  }
+
+  private extractFi3lFa3ilRelationships(
+    enhancedSegments: Record<string, MorphologicalDetails>
+  ): Array<{ fi3l: MorphologicalDetails; fa3il: MorphologicalDetails }> {
+    const relationships: Array<{ fi3l: MorphologicalDetails; fa3il: MorphologicalDetails }> = [];
+    
+    Object.values(enhancedSegments).forEach(segment => {
+      if (segment.relationships) {
+        segment.relationships.forEach(rel => {
+          if (rel.type === 'fi3l-fa3il' && rel.role === 'fi3l') {
+            const fa3ilSegment = enhancedSegments[rel.relatedSegmentId];
+            if (fa3ilSegment) {
+              relationships.push({ fi3l: segment, fa3il: fa3ilSegment });
+            }
+          }
+        });
+      }
+    });
+    
+    return relationships;
+  }
+
+  private convertFi3lFa3ilToConstruction(
+    relationship: { fi3l: MorphologicalDetails; fa3il: MorphologicalDetails },
+    segments: MorphologicalDetails[],
+    index: number
+  ): GrammarConstruction {
+    const fi3lIndex = segments.findIndex(s => s.id === relationship.fi3l.id);
+    const fa3ilIndex = segments.findIndex(s => s.id === relationship.fa3il.id);
+    
+    return {
+      id: `fi3l_fa3il_${index}`,
+      type: 'fi3l-fa3il',
+      spans: [fi3lIndex, fa3ilIndex].filter(i => i !== -1),
+      roles: ['fi3l', 'fa3il'],
+      certainty: 'definite',
+      explanation: `"${relationship.fi3l.text}" (فعل) is performed by "${relationship.fa3il.text}" (فاعل) in nominative case.`
     };
   }
 
@@ -546,7 +644,9 @@ export class GrammarQuizEngine {
       averageResponseTimeMs: 0,
       constructionTypeAccuracy: {
         'mudaf-mudaf-ilayh': 0,
-        'jar-majroor': 0
+        'jar-majroor': 0,
+        'mawsoof-sifah': 0,
+        'fi3l-fa3il': 0
       },
       difficultyPerformance: {
         beginner: 0,
@@ -571,7 +671,9 @@ export class GrammarQuizEngine {
         results.reduce((sum, r) => sum + r.responseTimeMs, 0) / results.length : 0,
       constructionTypeAccuracy: {
         'mudaf-mudaf-ilayh': this.calculateTypeAccuracy(results, 'mudaf-mudaf-ilayh'),
-        'jar-majroor': this.calculateTypeAccuracy(results, 'jar-majroor')
+        'jar-majroor': this.calculateTypeAccuracy(results, 'jar-majroor'),
+        'mawsoof-sifah': this.calculateTypeAccuracy(results, 'mawsoof-sifah'),
+        'fi3l-fa3il': this.calculateTypeAccuracy(results, 'fi3l-fa3il')
       },
       difficultyPerformance: {
         beginner: this.calculateDifficultyAccuracy(results, 'beginner'),

@@ -1,7 +1,8 @@
 /**
  * Relationship Selector Component
  * 
- * Allows users to select the type of grammatical construction they've identified.
+ * Allows users to select the type of grammatical relationship between selected words.
+ * Focuses on Mudaf-Mudaf Ilayh and Jar-Majroor constructions.
  * Maintains consistency with existing quiz UI patterns and design system.
  */
 
@@ -10,7 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
-import { Link2, Users } from 'lucide-react';
+import { Link2, Crown } from 'lucide-react';
 
 type ConstructionType = 'mudaf-mudaf-ilayh' | 'jar-majroor';
 
@@ -38,21 +39,21 @@ const constructionOptions: ConstructionOption[] = [
     type: 'mudaf-mudaf-ilayh',
     arabicName: 'مُضاف ومُضاف إليه',
     englishName: 'Possessive Construction',
-    description: 'Two nouns in a possessive relationship where the first (mudaf) is possessed by the second (mudaf ilayh)',
-    examples: ['كتاب الطالب', 'بيت المعلم', 'حديقة المدرسة'],
-    icon: <Users className="h-5 w-5" />,
-    color: 'text-purple-700 dark:text-purple-300',
-    bgColor: 'bg-purple-50 dark:bg-purple-900/20 border-purple-200 dark:border-purple-700'
+    description: 'Two nouns in a possessive relationship. The first noun (مُضاف) loses its definite article, and the second noun (مُضاف إليه) is in genitive case.',
+    examples: ['بِسْمِ اللَّهِ', 'رَبِّ الْعَالَمِينَ', 'مَالِكِ يَوْمِ الدِّينِ', 'كِتَابُ الطَّالِبِ'],
+    icon: <Crown className="h-5 w-5" />,
+    color: 'text-orange-700 dark:text-orange-300',
+    bgColor: 'bg-orange-50 dark:bg-orange-900/20 border-orange-200 dark:border-orange-700'
   },
   {
     type: 'jar-majroor',
     arabicName: 'جار ومجرور',
     englishName: 'Prepositional Phrase',
-    description: 'A preposition (jar) followed by a noun in genitive case (majroor)',
-    examples: ['في البيت', 'على الطاولة', 'من المدرسة'],
+    description: 'A preposition (جار) followed by a noun in genitive case (مجرور).',
+    examples: ['عَلَى صِرَاطٍ', 'فِي الْعَالَمِينَ', 'مِنَ الرَّحْمَنِ', 'بِسْمِ اللَّهِ'],
     icon: <Link2 className="h-5 w-5" />,
-    color: 'text-blue-700 dark:text-blue-300',
-    bgColor: 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-700'
+    color: 'text-purple-700 dark:text-purple-300',
+    bgColor: 'bg-purple-50 dark:bg-purple-900/20 border-purple-200 dark:border-purple-700'
   }
 ];
 
@@ -73,7 +74,7 @@ export function RelationshipSelector({
     <Card className={cn('w-full', className)}>
       <CardHeader>
         <CardTitle className="text-lg flex items-center gap-2">
-          <span>Select Grammatical Construction</span>
+          <span>Select Relationship Type</span>
           {selectedType && (
             <Badge variant="secondary" className="ml-2">
               {constructionOptions.find(opt => opt.type === selectedType)?.englishName}
@@ -82,7 +83,7 @@ export function RelationshipSelector({
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="grid gap-3 md:grid-cols-1">
           {constructionOptions.map((option) => {
             const isSelected = selectedType === option.type;
             
@@ -152,7 +153,7 @@ export function RelationshipSelector({
         {!selectedType && !disabled && (
           <div className="text-center py-2">
             <p className="text-sm text-muted-foreground">
-              Choose the type of grammatical construction you identified in the text above
+              Select words in the text above to form a construction, then choose the relationship type
             </p>
           </div>
         )}

@@ -1,46 +1,48 @@
 /**
- * Grammar Quiz Manager Hook
+ * Grammar Construction Quiz Manager Hook
  * 
  * Manages state and logic for the Grammar Construction Quiz feature.
+ * Focuses on identifying Arabic grammatical constructions like Mudaf-Mudaf Ilayh and Jar-Majroor.
  * Follows existing patterns from useQuizManager.ts for consistency.
  */
 
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import {
   GrammarQuizQuestion,
   GrammarQuizSession,
   QuizSettings,
   UserSelection,
-  AnswerValidation,
+  ConstructionValidation,
   QuizState,
   QuestionResult,
-  GrammarConstruction
+  GrammarConstruction,
+  ConstructionType
 } from '@/types/grammarQuiz';
 import { grammarQuizEngine } from '@/utils/grammarQuizEngine';
 import { MorphologicalDetails } from '@/types/morphology';
 
 /**
- * Extended interface to support multiple constructions per verse
+ * State for construction identification
  */
-interface MultiConstructionSelection {
-  id: string;
-  indices: number[];
-  constructionType: 'mudaf-mudaf-ilayh' | 'jar-majroor';
-  timestamp: Date;
-  isSubmitted: boolean;
-  validation?: AnswerValidation;
-}
-
 interface GrammarQuizManagerState {
   quizState: QuizState;
   currentSession: GrammarQuizSession | null;
   questionStartTime: number;
-  // Support multiple constructions per verse
-  currentSelections: MultiConstructionSelection[];
-  activeSelectionId: string | null; // Currently being selected
-  selectedIndices: number[]; // For current active selection
-  selectedConstructionType: 'mudaf-mudaf-ilayh' | 'jar-majroor' | null;
-  submittedConstructions: MultiConstructionSelection[]; // All submitted constructions for current question
+  // Construction-based selection approach
+  selectedIndices: number[]; // Currently selected word indices
+  selectedConstructionType: ConstructionType | null; // Selected construction type
+  submittedConstructions: SubmittedConstruction[]; // All submitted constructions for current question
+  currentValidation: ConstructionValidation | null; // Current answer validation
+}
+
+/**
+ * Interface for tracking submitted constructions in a question
+ */
+interface SubmittedConstruction {
+  id: string;
+  indices: number[];
+  constructionType: ConstructionType;
+  validation?: ConstructionValidation;
 }
 
 export function useGrammarQuizManager() {
@@ -54,14 +56,14 @@ export function useGrammarQuizManager() {
     },
     currentSession: null,
     questionStartTime: 0,
-    currentSelections: [],
-    activeSelectionId: null,
     selectedIndices: [],
     selectedConstructionType: null,
-    submittedConstructions: []
+    submittedConstructions: [],
+    currentValidation: null
   });
 
-  const currentValidation = useRef<AnswerValidation | null>(null);
+  // Use a ref to track current validation to avoid stale closures
+  const currentValidation = useRef<ConstructionValidation | null>(null);
 
   // Session Management
   const startSession = useCallback((settings: QuizSettings) => {

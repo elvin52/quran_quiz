@@ -12,12 +12,14 @@
  * - Natural verse display with proper metadata
  */
 
-import React from 'react';
+import React, { useCallback } from 'react';
 import { cn } from '@/lib/utils';
-import { MorphologicalDetails } from '@/types/morphology';
 import { Badge } from '@/components/ui/badge';
+import { MorphologicalDetails } from '@/types/morphology';
+import { selectiveAggregationService } from '../../utils/selectiveAggregationService';
+import { useMASAQData } from '../../hooks/useMASAQData';
 
-interface QuranVerseDisplayProps {
+export interface QuranVerseDisplayProps {
   segments: MorphologicalDetails[];
   selectedIndices: number[];
   correctIndices?: number[];
@@ -26,11 +28,11 @@ interface QuranVerseDisplayProps {
   showFeedback?: boolean;
   disabled?: boolean;
   className?: string;
-  // Quranic metadata
   verseMetadata?: {
+    surahId: number;
+    verseId: number;
     surahName: string;
     surahNameArabic: string;
-    verseId: number;
     translation: string;
   };
 }
@@ -47,14 +49,291 @@ export function QuranVerseDisplay({
   verseMetadata
 }: QuranVerseDisplayProps) {
   
+  // Load MASAQ data for Token Group aggregation
+  const { dataset: masaqDataset, isLoading: masaqLoading, error: masaqError } = useMASAQData();
+  
+  // Process segments through MASAQ Token Group aggregation or fallback
+  const processSegments = useCallback((segments: MorphologicalDetails[]) => {
+    // Try MASAQ Token_Group_ID grouping first (using word_no as Token_Group_ID)
+    if (masaqDataset && masaqDataset.entries.length > 0 && verseMetadata) {
+      console.log('🎯 Attempting MASAQ Token_Group_ID grouping for', segments.length, 'segments');
+      
+      try {
+        // Get MASAQ entries for this specific verse
+        const verseEntries = masaqDataset.entries.filter(entry => 
+          entry.sura_no === verseMetadata.surahId && 
+          entry.verse_no === verseMetadata.verseId
+        );
+        
+        if (verseEntries.length === 0) {
+          console.log('⚠️  No MASAQ entries found for this verse, using fallback');
+          return useFallbackAggregation(segments);
+        }
+        
+        console.log(`📊 Found ${verseEntries.length} MASAQ entries for verse ${verseMetadata.surahId}:${verseMetadata.verseId}`);
+        
+        // Group MASAQ entries by word_no (acting as Token_Group_ID)
+        const tokenGroups = new Map<number, {
+          displayWord: string;
+          entries: typeof verseEntries;
+          segmentIndices: number[];
+        }>();
+        
+        // First pass: create token groups from MASAQ data
+        verseEntries.forEach((entry, entryIndex) => {
+          const tokenGroupId = parseInt(entry.id); // Use ID as Token_Group_ID (multiple entries share same ID)
+          const displayWord = entry.word;          // Use word as Display_Word
+          
+          if (!tokenGroups.has(tokenGroupId)) {
+            tokenGroups.set(tokenGroupId, {
+              displayWord,
+              entries: [],
+              segmentIndices: []
+            });
+          }
+          
+          tokenGroups.get(tokenGroupId)!.entries.push(entry);
+          console.log(`🏷️  MASAQ Entry ${entryIndex}: "${entry.segmented_word}" → Token Group ${tokenGroupId} (${displayWord})`);
+        });
+        
+        // Second pass: map segments to token groups using sequential matching
+        let usedEntryIndices = new Set<number>(); // Track which MASAQ entries have been used
+        
+        segments.forEach((segment, segmentIndex) => {
+          console.log(`🔍 Matching segment ${segmentIndex}: "${segment.text}"`);
+          
+          // Find matching MASAQ entry for this segment (prioritize unused entries in sequence)
+          let matchingEntry = null;
+          let matchingEntryIndex = -1;
+          
+          // First, try to find unused entries
+          for (let entryIndex = 0; entryIndex < verseEntries.length; entryIndex++) {
+            if (usedEntryIndices.has(entryIndex)) continue; // Skip already used entries
+            
+            const entry = verseEntries[entryIndex];
+            // Normalize Arabic characters and clean diacritics
+            const normalizeArabic = (text: string) => {
+              return text
+                // Normalize Alef variants: ٱ → ا, آ → ا, أ → ا, إ → ا
+                .replace(/[ٱآأإ]/g, 'ا')
+                // Normalize Teh Marbuta: ة → ه
+                .replace(/ة/g, 'ه')
+                // Normalize Yeh variants: ي → ى, ئ → ى
+                .replace(/[يئ]/g, 'ى')
+                // Remove diacritics (comprehensive list)
+                .replace(/[ًٌٍَُِّْٰٕٖٜٟٓٔٗ٘ٙٚٛٝٞۖۗۘۙۚۛۜ۝۞ۣ۪ۭ۟۠ۡۢۤۧۨ۫۬]/g, '')
+                .trim();
+            };
+            
+            const segmentOriginal = segment.text.trim();
+            const entryOriginal = entry.segmented_word.trim();
+            const segmentNormalized = normalizeArabic(segmentOriginal);
+            const entryNormalized = normalizeArabic(entryOriginal);
+            
+            console.log(`   📝 Comparing with MASAQ "${entry.segmented_word}"`);
+            console.log(`   🧹 Segment: "${segmentOriginal}" → "${segmentNormalized}"`);
+            console.log(`   🧹 Entry: "${entryOriginal}" → "${entryNormalized}"`);
+            
+            // Try multiple matching strategies
+            const exactWithDiacritics = segmentOriginal === entryOriginal;
+            const exactNormalized = segmentNormalized === entryNormalized;
+            const segmentContainsEntry = segmentOriginal.includes(entryOriginal) || segmentNormalized.includes(entryNormalized);
+            const entryContainsSegment = entryOriginal.includes(segmentOriginal) || entryNormalized.includes(segmentNormalized);
+            
+            const rootSegment = segmentNormalized.replace(/^(ال|و|ف|ب|ل|ك)/, '').replace(/(ة|ت|ك|ه|ها|هم|هن|ين|ان|ون)$/, '');
+            const rootEntry = entryNormalized.replace(/^(ال|و|ف|ب|ل|ك)/, '').replace(/(ة|ت|ك|ه|ها|هم|هن|ين|ان|ون)$/, '');
+            const rootMatch = rootSegment === rootEntry && rootSegment.length > 0;
+            
+            console.log(`   ✓ Exact w/ diacritics: ${exactWithDiacritics}`);
+            console.log(`   ✓ Exact normalized: ${exactNormalized}`);
+            console.log(`   ✓ Containment: ${segmentContainsEntry || entryContainsSegment}`);
+            console.log(`   ✓ Root match: ${rootMatch} ("${rootSegment}" vs "${rootEntry}")`);
+            
+            const isMatch = exactWithDiacritics || exactNormalized || segmentContainsEntry || entryContainsSegment || rootMatch;
+            console.log(`   🎯 Final result: ${isMatch ? 'MATCH' : 'NO MATCH'}`);
+            
+            if (isMatch) {
+              matchingEntry = entry;
+              matchingEntryIndex = entryIndex;
+              break; // Stop at first unused match
+            }
+          }
+          
+          // If no unused entry found, allow reuse (for cases where one MASAQ entry maps to multiple segments)
+          if (!matchingEntry) {
+            console.log(`🔄 No unused matches found, trying all entries for segment ${segmentIndex}`);
+            for (let entryIndex = 0; entryIndex < verseEntries.length; entryIndex++) {
+              const entry = verseEntries[entryIndex];
+              
+              // Normalize Arabic characters and clean diacritics
+              const normalizeArabic = (text: string) => {
+                return text
+                  // Normalize Alef variants: ٱ → ا, آ → ا, أ → ا, إ → ا
+                  .replace(/[ٱآأإ]/g, 'ا')
+                  // Normalize Teh Marbuta: ة → ه
+                  .replace(/ة/g, 'ه')
+                  // Normalize Yeh variants: ي → ى, ئ → ى
+                  .replace(/[يئ]/g, 'ى')
+                  // Remove diacritics (comprehensive list)
+                  .replace(/[ًٌٍَُِّْٰٕٖٜٟٓٔٗ٘ٙٚٛٝٞۖۗۘۙۚۛۜ۝۞ۣ۪ۭ۟۠ۡۢۤۧۨ۫۬]/g, '')
+                  .trim();
+              };
+              
+              const segmentOriginal = segment.text.trim();
+              const entryOriginal = entry.segmented_word.trim();
+              const segmentNormalized = normalizeArabic(segmentOriginal);
+              const entryNormalized = normalizeArabic(entryOriginal);
+              
+              // Try multiple matching strategies
+              const exactWithDiacritics = segmentOriginal === entryOriginal;
+              const exactNormalized = segmentNormalized === entryNormalized;
+              const segmentContainsEntry = segmentOriginal.includes(entryOriginal) || segmentNormalized.includes(entryNormalized);
+              const entryContainsSegment = entryOriginal.includes(segmentOriginal) || entryNormalized.includes(segmentNormalized);
+              
+              const rootSegment = segmentNormalized.replace(/^(ال|و|ف|ب|ل|ك)/, '').replace(/(ة|ت|ك|ه|ها|هم|هن|ين|ان|ون)$/, '');
+              const rootEntry = entryNormalized.replace(/^(ال|و|ف|ب|ل|ك)/, '').replace(/(ة|ت|ك|ه|ها|هم|هن|ين|ان|ون)$/, '');
+              const rootMatch = rootSegment === rootEntry && rootSegment.length > 0;
+              
+              const isMatch = exactWithDiacritics || exactNormalized || segmentContainsEntry || entryContainsSegment || rootMatch;
+              
+              if (isMatch) {
+                matchingEntry = entry;
+                matchingEntryIndex = entryIndex;
+                break;
+              }
+            }
+          }
+          
+          if (matchingEntry) {
+            // Mark this entry as used (for sequential matching)
+            usedEntryIndices.add(matchingEntryIndex);
+            
+            const tokenGroupId = parseInt(matchingEntry.id);
+            console.log(`🎯 Found match for segment ${segmentIndex}: "${segment.text}" → MASAQ "${matchingEntry.segmented_word}" (Token Group ${tokenGroupId}, entry index ${matchingEntryIndex})`);
+            
+            const group = tokenGroups.get(tokenGroupId);
+            if (group) {
+              group.segmentIndices.push(segmentIndex);
+              console.log(`🔗 Segment ${segmentIndex} "${segment.text}" → Token Group ${tokenGroupId} (now has ${group.segmentIndices.length} segments)`);
+            } else {
+              console.log(`❌ Token Group ${tokenGroupId} not found in tokenGroups map! Available groups: [${Array.from(tokenGroups.keys()).join(', ')}]`);
+            }
+          } else {
+            console.log(`⚠️  No MASAQ match found for segment ${segmentIndex}: "${segment.text}"`);
+          }
+        });
+        
+        // Third pass: create display units from token groups
+        const processed: MorphologicalDetails[] = [];
+        const sortedTokenGroupIds = Array.from(tokenGroups.keys()).sort((a, b) => a - b);
+        
+        sortedTokenGroupIds.forEach(tokenGroupId => {
+          const group = tokenGroups.get(tokenGroupId)!;
+          
+          if (group.segmentIndices.length > 0) {
+            // Get the first segment as base (preserving original properties)
+            const baseSegmentIndex = Math.min(...group.segmentIndices);
+            const baseSegment = segments[baseSegmentIndex];
+            
+            // Create combined segment with Display_Word
+            const combinedSegment: MorphologicalDetails = {
+              ...baseSegment,
+              id: `token_group_${tokenGroupId}`,
+              text: group.displayWord, // Use MASAQ Display_Word
+              originalIndices: group.segmentIndices // Track all original segment indices
+            };
+            
+            processed.push(combinedSegment);
+            console.log(`📦 Token Group ${tokenGroupId}: "${group.displayWord}" (${group.segmentIndices.length} segments: [${group.segmentIndices.join(', ')}])`);
+          }
+        });
+        
+        if (processed.length > 0) {
+          console.log('✅ MASAQ Token_Group_ID grouping successful:', processed.length, 'display units');
+          processed.forEach((p, i) => {
+            console.log(`📝 [${i}]: "${p.text}" (original indices: [${p.originalIndices?.join(', ')}])`);
+          });
+          return processed;
+        }
+        
+      } catch (error) {
+        console.error('❌ MASAQ Token_Group_ID grouping failed:', error);
+      }
+    }
+    
+    // Fallback to selective aggregation
+    return useFallbackAggregation(segments);
+  }, [masaqDataset, verseMetadata]);
+  
+  // Helper function for fallback aggregation
+  const useFallbackAggregation = useCallback((segments: MorphologicalDetails[]) => {
+    console.log('🔄 Fallback: Using selectiveAggregationService for', segments.length, 'segments');
+    
+    const aggregated = selectiveAggregationService.aggregateSegments(segments);
+    
+    const processed = aggregated.map((aggSeg, index) => ({
+      ...aggSeg.originalSegments[0], // Use first segment as base
+      id: aggSeg.id,
+      text: aggSeg.text,
+      morphology: aggSeg.morphology,
+      type: aggSeg.type,
+      originalIndices: aggSeg.originalSegments.map((_, idx) => 
+        segments.findIndex(s => s.id === aggSeg.originalSegments[idx].id)
+      ).filter(idx => idx !== -1)
+    }));
+
+    console.log('✅ SelectiveAggregation processed into', processed.length, 'display units');
+    processed.forEach((p, i) => {
+      console.log(`📝 [${i}]: "${p.text}" (original indices: [${p.originalIndices?.join(', ')}])`);
+    });
+    
+    return processed;
+  }, []);
+
+  // Create mapping from processed indices to original segment indices
+  const getOriginalIndicesForProcessed = (processedIndex: number): number[] => {
+    const processedSegment = processSegments(segments)[processedIndex];
+    
+    // Use the precisely tracked original indices
+    return processedSegment.originalIndices || [processedIndex];
+  };
+
+  // Check if a processed segment is selected (any of its original segments are selected)
+  const isProcessedSegmentSelected = (processedIndex: number): boolean => {
+    const originalIndices = getOriginalIndicesForProcessed(processedIndex);
+    return originalIndices.some(idx => selectedIndices.includes(idx));
+  };
+
+  // Check if a processed segment is correct/incorrect
+  const isProcessedSegmentCorrect = (processedIndex: number): boolean => {
+    const originalIndices = getOriginalIndicesForProcessed(processedIndex);
+    return originalIndices.some(idx => correctIndices.includes(idx));
+  };
+
+  const isProcessedSegmentIncorrect = (processedIndex: number): boolean => {
+    const originalIndices = getOriginalIndicesForProcessed(processedIndex);
+    return originalIndices.some(idx => incorrectIndices.includes(idx));
+  };
+
+  // Get selection order for processed segment
+  const getProcessedSelectionOrder = (processedIndex: number): number => {
+    const originalIndices = getOriginalIndicesForProcessed(processedIndex);
+    const selectedOriginalIndices = originalIndices.filter(idx => selectedIndices.includes(idx));
+    if (selectedOriginalIndices.length === 0) return 0;
+    
+    // Return the order of the first selected segment in this processed unit
+    const firstSelectedIndex = Math.min(...selectedOriginalIndices);
+    return selectedIndices.indexOf(firstSelectedIndex) + 1;
+  };
+
   /**
    * Get visual styling for word marking based on state
    */
-  const getWordMarkingStyle = (index: number): React.CSSProperties => {
-    const isSelected = selectedIndices.includes(index);
-    const isCorrect = correctIndices.includes(index);
-    const isIncorrect = incorrectIndices.includes(index);
-    const selectionOrder = selectedIndices.indexOf(index) + 1;
+  const getWordMarkingStyle = (processedIndex: number): React.CSSProperties => {
+    const isSelected = isProcessedSegmentSelected(processedIndex);
+    const isCorrect = isProcessedSegmentCorrect(processedIndex);
+    const isIncorrect = isProcessedSegmentIncorrect(processedIndex);
+    const selectionOrder = getProcessedSelectionOrder(processedIndex);
 
     // Base styles for all words - 3x larger Arabic font
     const baseStyle: React.CSSProperties = {
@@ -110,8 +389,8 @@ export function QuranVerseDisplay({
   /**
    * Get selection order badge for multi-word constructions
    */
-  const getSelectionBadge = (index: number) => {
-    const selectionOrder = selectedIndices.indexOf(index) + 1;
+  const getSelectionBadge = (processedIndex: number) => {
+    const selectionOrder = getProcessedSelectionOrder(processedIndex);
     if (selectionOrder === 0 || showFeedback) return null;
 
     const isGold = selectionOrder % 2 === 1;
@@ -131,11 +410,22 @@ export function QuranVerseDisplay({
 
   /**
    * Handle word click with proper event handling
+   * When user clicks an aggregated segment, select all its original segments
    */
-  const handleWordClick = (index: number, event: React.MouseEvent) => {
+  const handleWordClick = (processedIndex: number, event: React.MouseEvent) => {
     event.preventDefault();
     if (disabled || showFeedback) return;
-    onWordClick(index);
+    
+    // Get all original indices for this processed segment
+    const originalIndices = getOriginalIndicesForProcessed(processedIndex);
+    
+    // FIXED: Select ALL original segments that make up this aggregated word
+    // For example, "لِللَّهِ" = [prefix "لِ", root "لَّهِ"] should select both indices
+    console.log(`🎯 Word click: aggregated segment [${processedIndex}] maps to original indices:`, originalIndices);
+    
+    originalIndices.forEach(originalIndex => {
+      onWordClick(originalIndex);
+    });
   };
 
   return (
@@ -153,7 +443,7 @@ export function QuranVerseDisplay({
         </div>
       )}
 
-      {/* Arabic Verse with Visual Word Marking */}
+      {/* Arabic Verse with Linguistically-Aware Aggregation */}
       <div className="text-center" dir="rtl">
         <div 
           className="font-arabic leading-loose text-gray-800 dark:text-gray-200"
@@ -163,20 +453,23 @@ export function QuranVerseDisplay({
             lineHeight: '9rem' // Proportionally scaled for better readability
           }}
         >
-          {segments.map((segment, index) => (
-            <span
-              key={segment.id}
-              style={getWordMarkingStyle(index)}
-              onClick={(e) => handleWordClick(index, e)}
-              className="relative"
-              title={showFeedback ? 
-                `${segment.text} (${segment.morphology})` :
-                `${selectedIndices.includes(index) ? 'Deselect' : 'Select'}: ${segment.text}`
-              }
-            >
-              {segment.text}
-              {getSelectionBadge(index)}
-            </span>
+          {processSegments(segments).map((aggregatedSegment, index) => (
+            <React.Fragment key={aggregatedSegment.id}>
+              <span
+                style={getWordMarkingStyle(index)}
+                onClick={(e) => handleWordClick(index, e)}
+                className="relative"
+                title={showFeedback ? 
+                  `${aggregatedSegment.text} (${aggregatedSegment.morphology})` :
+                  `${isProcessedSegmentSelected(index) ? 'Deselect' : 'Select'}: ${aggregatedSegment.text}`
+                }
+              >
+                {aggregatedSegment.text}
+                {getSelectionBadge(index)}
+              </span>
+              {/* Add space between words (but not after the last word) */}
+              {index < processSegments(segments).length - 1 && ' '}
+            </React.Fragment>
           ))}
         </div>
       </div>

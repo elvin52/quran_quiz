@@ -10,6 +10,7 @@ export interface MorphologicalDetails {
   case?: 'nominative' | 'accusative' | 'genitive';
   number?: 'singular' | 'dual' | 'plural';
   gender?: 'masculine' | 'feminine';
+  isDefinite?: boolean;                    // Required for الموصوف والصفة agreement
   person?: 'first' | 'second' | 'third';
   tense?: 'past' | 'present' | 'future' | 'imperative';
   voice?: 'active' | 'passive';
@@ -28,12 +29,15 @@ export interface MorphologicalDetails {
   
   // Grammatical relationships
   relationships?: GrammaticalRelationship[];
+  
+  // Index tracking for aggregated segments (used in Token Group aggregation)
+  originalIndices?: number[];
 }
 
 export interface GrammaticalRelationship {
   id: string;
-  type: 'jar-majrur' | 'mudaf-mudaf-ilayh' | 'mawsuf-sifah' | 'verb-object';
-  role: 'jar' | 'majrur' | 'mudaf' | 'mudaf-ilayh' | 'mawsuf' | 'sifah' | 'verb' | 'object';
+  type: 'jar-majrur' | 'mudaf-mudaf-ilayh' | 'mawsuf-sifah' | 'mawsoof-sifah' | 'fi3l-fa3il' | 'verb-object';
+  role: 'jar' | 'majrur' | 'mudaf' | 'mudaf-ilayh' | 'mawsuf' | 'sifah' | 'mawsoof' | 'fi3l' | 'fa3il' | 'verb' | 'object';
   relatedSegmentId: string;
   description: string;
 }

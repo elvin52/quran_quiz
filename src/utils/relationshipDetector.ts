@@ -182,14 +182,14 @@ const detectMawsufSifahRelationships = (
   segments: MorphologicalDetails[], 
   enhanced: Record<string, MorphologicalDetails>
 ) => {
-  console.log('🎨 Detecting Mawsuf-Sifah relationships...');
+  console.log('🎨 Detecting Mawsoof-Sifah (الموصوف والصفة) relationships...');
   
   for (let i = 0; i < segments.length - 1; i++) {
     const current = segments[i];
     
-    // Look for nouns
+    // Look for nouns (موصوف)
     if (current.morphology === 'noun') {
-      // Look for following adjectives with agreement
+      // Look for following adjectives (صفة) with comprehensive agreement
       for (let j = i + 1; j < Math.min(i + 4, segments.length); j++) {
         const candidate = segments[j];
         
@@ -198,15 +198,15 @@ const detectMawsufSifahRelationships = (
           continue;
         }
         
-        if (candidate.morphology === 'adjective' && agreementMatch(current, candidate)) {
-          console.log(`✅ Found Mawsuf-Sifah: ${current.text} (${current.id}) + ${candidate.text} (${candidate.id})`);
+        if (candidate.morphology === 'adjective' && comprehensiveAgreementMatch(current, candidate)) {
+          console.log(`✅ Found Mawsoof-Sifah: ${current.text} (${current.id}) + ${candidate.text} (${candidate.id})`);
           
           addBidirectionalRelationship(
             enhanced,
             current.id,
             candidate.id,
-            'mawsuf-sifah',
-            'mawsuf',
+            'mawsoof-sifah',
+            'mawsoof',
             'sifah',
             `Noun "${current.text}" described by adjective "${candidate.text}"`,
             `Adjective "${candidate.text}" describing noun "${current.text}"`
@@ -261,33 +261,46 @@ const detectVerbSubjectRelationships = (
   segments: MorphologicalDetails[], 
   enhanced: Record<string, MorphologicalDetails>
 ) => {
-  console.log('⚡ Detecting Verb-Subject (Fi\'l-Fa\'il) relationships...');
+  console.log('⚡ Detecting Fi3l-Fa3il (الفعل والفاعل) relationships...');
   
   for (let i = 0; i < segments.length; i++) {
     const current = segments[i];
     
     if (current.morphology === 'verb') {
-      // Look for nominative nouns (subjects) near the verb
+      console.log(`Found verb (فعل): ${current.text} (${current.id})`);
+      
+      // Look for nominative nouns (فاعل) near the verb
       for (let j = Math.max(0, i - 3); j < Math.min(i + 4, segments.length); j++) {
         if (j === i) continue;
         
         const candidate = segments[j];
         
-        if (candidate.morphology === 'noun' && candidate.case === 'nominative') {
-          console.log(`✅ Found Verb-Subject: ${current.text} (${current.id}) <-> ${candidate.text} (${candidate.id})`);
+        // Skip particles and articles
+        if (candidate.morphology === 'particle') {
+          continue;
+        }
+        
+        // Look for nouns in nominative case (فاعل must be مرفوع)
+        if (candidate.morphology === 'noun' && 
+            (candidate.case === 'nominative' || !candidate.case)) { // Allow when case unavailable
           
-          addBidirectionalRelationship(
-            enhanced,
-            current.id,
-            candidate.id,
-            'verb-object',
-            'verb',
-            'object',
-            `Verb "${current.text}" with subject "${candidate.text}"`,
-            `Subject "${candidate.text}" of verb "${current.text}"`
-          );
-          
-          break;
+          // Additional validation for Fi3l-Fa3il agreement
+          if (verbSubjectAgreementMatch(current, candidate)) {
+            console.log(`✅ Found Fi3l-Fa3il: ${current.text} (فعل) <-> ${candidate.text} (فاعل)`);
+            
+            addBidirectionalRelationship(
+              enhanced,
+              current.id,
+              candidate.id,
+              'fi3l-fa3il',
+              'fi3l',
+              'fa3il',
+              `Verb "${current.text}" performed by subject "${candidate.text}"`,
+              `Subject "${candidate.text}" performing verb "${current.text}"`
+            );
+            
+            break; // One subject per verb in most cases
+          }
         }
       }
     }
@@ -461,9 +474,9 @@ const addBidirectionalRelationship = (
   enhanced: Record<string, MorphologicalDetails>,
   id1: string,
   id2: string,
-  type: 'jar-majrur' | 'mudaf-mudaf-ilayh' | 'mawsuf-sifah' | 'verb-object',
-  role1: 'jar' | 'majrur' | 'mudaf' | 'mudaf-ilayh' | 'mawsuf' | 'sifah' | 'verb' | 'object',
-  role2: 'jar' | 'majrur' | 'mudaf' | 'mudaf-ilayh' | 'mawsuf' | 'sifah' | 'verb' | 'object',
+  type: 'jar-majrur' | 'mudaf-mudaf-ilayh' | 'mawsoof-sifah' | 'fi3l-fa3il' | 'verb-object',
+  role1: 'jar' | 'majrur' | 'mudaf' | 'mudaf-ilayh' | 'mawsoof' | 'sifah' | 'fi3l' | 'fa3il' | 'verb' | 'object',
+  role2: 'jar' | 'majrur' | 'mudaf' | 'mudaf-ilayh' | 'mawsoof' | 'sifah' | 'fi3l' | 'fa3il' | 'verb' | 'object',
   description1: string,
   description2: string
 ) => {
@@ -558,4 +571,75 @@ const agreementMatch = (noun: MorphologicalDetails, adjective: MorphologicalDeta
   const genderMatch = !noun.gender || !adjective.gender || noun.gender === adjective.gender;
   
   return caseMatch && numberMatch && genderMatch;
+};
+
+// Comprehensive agreement matching for الموصوف والصفة (Mawsoof-Sifah)
+const comprehensiveAgreementMatch = (noun: MorphologicalDetails, adjective: MorphologicalDetails): boolean => {
+  console.log(`Checking agreement: ${noun.text} (${noun.morphology}) <-> ${adjective.text} (${adjective.morphology})`);
+  
+  // 1. Case Agreement (إعراب) - Must match when available
+  const caseMatch = !noun.case || !adjective.case || noun.case === adjective.case;
+  if (!caseMatch) {
+    console.log(`  ❌ Case mismatch: ${noun.case} vs ${adjective.case}`);
+    return false;
+  }
+  
+  // 2. Number Agreement (عدد) - Must match when available
+  const numberMatch = !noun.number || !adjective.number || noun.number === adjective.number;
+  if (!numberMatch) {
+    console.log(`  ❌ Number mismatch: ${noun.number} vs ${adjective.number}`);
+    return false;
+  }
+  
+  // 3. Gender Agreement (جنس) - Must match when available
+  const genderMatch = !noun.gender || !adjective.gender || noun.gender === adjective.gender;
+  if (!genderMatch) {
+    console.log(`  ❌ Gender mismatch: ${noun.gender} vs ${adjective.gender}`);
+    return false;
+  }
+  
+  // 4. Definiteness Agreement (تعريف/تنكير) - Critical for الموصوف والصفة
+  const nounDefinite = (noun as any).isDefinite || noun.text.startsWith('ال') || noun.text.startsWith('ٱل');
+  const adjDefinite = (adjective as any).isDefinite || adjective.text.startsWith('ال') || adjective.text.startsWith('ٱل');
+  
+  const definitenessMatch = nounDefinite === adjDefinite;
+  if (!definitenessMatch) {
+    console.log(`  ❌ Definiteness mismatch: noun=${nounDefinite}, adjective=${adjDefinite}`);
+    return false;
+  }
+  
+  console.log(`  ✅ Full agreement: case=${noun.case}, number=${noun.number}, gender=${noun.gender}, definite=${nounDefinite}`);
+  return true;
+};
+
+// Verb-Subject agreement matching for الفعل والفاعل (Fi3l-Fa3il)
+const verbSubjectAgreementMatch = (verb: MorphologicalDetails, subject: MorphologicalDetails): boolean => {
+  console.log(`Checking verb-subject agreement: ${verb.text} (${verb.morphology}) <-> ${subject.text} (${subject.morphology})`);
+  
+  // 1. Person Agreement (الشخص) - Must match when available
+  if (verb.person && subject.person && verb.person !== subject.person) {
+    console.log(`  ❌ Person mismatch: ${verb.person} vs ${subject.person}`);
+    return false;
+  }
+  
+  // 2. Number Agreement (العدد) - Must match when available
+  if (verb.number && subject.number && verb.number !== subject.number) {
+    console.log(`  ❌ Number mismatch: ${verb.number} vs ${subject.number}`);
+    return false;
+  }
+  
+  // 3. Gender Agreement (الجنس) - Must match when available
+  if (verb.gender && subject.gender && verb.gender !== subject.gender) {
+    console.log(`  ❌ Gender mismatch: ${verb.gender} vs ${subject.gender}`);
+    return false;
+  }
+  
+  // 4. Subject must be in nominative case (الفاعل مرفوع)
+  if (subject.case && subject.case !== 'nominative') {
+    console.log(`  ❌ Subject not nominative: ${subject.case}`);
+    return false;
+  }
+  
+  console.log(`  ✅ Verb-subject agreement: person=${verb.person}, number=${verb.number}, gender=${verb.gender}`);
+  return true;
 };

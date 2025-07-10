@@ -65,7 +65,7 @@ export function GrammarQuizPage({ className }: GrammarQuizPageProps) {
   const handleStartQuiz = (pronounSettings: any) => {
     const grammarSettings: GrammarQuizSettings = {
       questionCount: pronounSettings.questionCount || 10,
-      difficulty: pronounSettings.difficulty || 'mixed',
+      difficulty: pronounSettings.difficulty || 'beginner',
       constructionTypes: ['mudaf-mudaf-ilayh', 'jar-majroor'],
       hintsEnabled: pronounSettings.showExplanations || false,
       immediateAnswers: true,
@@ -242,6 +242,7 @@ export function GrammarQuizPage({ className }: GrammarQuizPageProps) {
               onWordClick={toggleWordSelection}
               disabled={quizState.isLoading}
               verseMetadata={{
+                surahId: quizState.currentQuestion.quranMetadata?.surahId || 0,
                 surahName: quizState.currentQuestion.quranMetadata?.surahName || '',
                 surahNameArabic: quizState.currentQuestion.quranMetadata?.surahNameArabic || '',
                 verseId: quizState.currentQuestion.quranMetadata?.verseId || 0,
@@ -357,6 +358,7 @@ export function GrammarQuizPage({ className }: GrammarQuizPageProps) {
               showFeedback={true}
               disabled={true}
               verseMetadata={{
+                surahId: quizState.currentQuestion!.quranMetadata?.surahId || 0,
                 surahName: quizState.currentQuestion!.quranMetadata?.surahName || '',
                 surahNameArabic: quizState.currentQuestion!.quranMetadata?.surahNameArabic || '',
                 verseId: quizState.currentQuestion!.quranMetadata?.verseId || 0,
