@@ -68,6 +68,49 @@ export interface QuranAnswerValidation {
   };
 }
 
+// =====================
+// GRANULAR COMPONENT VALIDATION
+// =====================
+
+// Import ComponentRole and related types
+import type { ComponentRole, ComponentSelection, ComponentConstruction } from './grammarQuiz';
+
+// Component-level validation result
+export interface ComponentValidationResult {
+  component: ComponentSelection;
+  isCorrect: boolean;
+  expectedRole?: ComponentRole;  // What role this word should have (if any)
+  feedback: string;              // Specific feedback for this component
+}
+
+// Construction-level validation for component-based answers
+export interface ConstructionValidationResult {
+  type: string;  // ConstructionType
+  isComplete: boolean;           // Are all required components present?
+  isCorrect: boolean;           // Are all components correctly assigned?
+  componentResults: ComponentValidationResult[];
+  feedback: string;
+}
+
+// Enhanced validation for component-based quiz
+export interface ComponentAnswerValidation {
+  isCorrect: boolean;
+  isPartiallyCorrect: boolean;
+  score: number;                                    // 0-100
+  componentScore: number;                           // Component-level accuracy
+  constructionScore: number;                        // Construction completion accuracy
+  componentResults: ComponentValidationResult[];    // Individual component feedback
+  constructionResults: ConstructionValidationResult[]; // Construction-level feedback
+  feedback: {
+    message: string;
+    explanation: string;
+    detailedBreakdown: string[];                    // Component-by-component analysis
+    correctHighlight: string[];                     // Word IDs to highlight as correct
+    incorrectHighlight: string[];                   // Word IDs to highlight as incorrect
+    roleHighlight: Record<string, ComponentRole>;   // Word ID to role mapping for display
+  };
+}
+
 // Session tracking for analytics
 export interface QuranGrammarQuizSession {
   id: string;

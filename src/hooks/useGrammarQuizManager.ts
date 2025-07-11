@@ -236,22 +236,51 @@ export function useGrammarQuizManager() {
   const finalizeQuestion = useCallback(() => {
     if (!state.currentSession || !state.quizState.currentQuestion) return;
 
-    // Create comprehensive validation for all submitted constructions
-    const allCorrect = state.submittedConstructions.every(c => c.validation?.isCorrect);
-    const totalConstructions = state.quizState.currentQuestion.correctAnswers.length;
+    // Import the supported construction types
+    const SUPPORTED_CONSTRUCTION_TYPES = ['mudaf-mudaf-ilayh', 'jar-majroor', 'fil-fail', 'harf-nasb-ismuha'];
+    
+    // Only count supported constructions, not all constructions
+    const supportedConstructions = state.quizState.currentQuestion.correctAnswers.filter(c => 
+      SUPPORTED_CONSTRUCTION_TYPES.includes(c.type)
+    );
+    const totalConstructions = supportedConstructions.length;
+    
+    // Count how many supported constructions were correctly identified
+    const correctlyIdentified = state.submittedConstructions.filter(c => c.validation?.isCorrect).length;
     const foundConstructions = state.submittedConstructions.length;
 
-    // Record overall question result - simplified for demo, would be more detailed in production
+    // Use the actual validation from the last submitted construction for detailed feedback
+    const lastValidation = state.submittedConstructions[state.submittedConstructions.length - 1]?.validation;
+    
+    // Calculate proper proportional score
+    const proportionalScore = totalConstructions > 0 ? 
+      Math.round((correctlyIdentified / totalConstructions) * 100) : 0;
+    
+    // Determine status for feedback  
+    const isAllCorrect = proportionalScore === 100;
+    const isPartiallyCorrect = proportionalScore > 0 && proportionalScore < 100;
+    const isAllIncorrect = proportionalScore === 0;
+
+    // Use enhanced feedback logic
+    const statusMessage = isAllCorrect ? 'All correct!' : 
+                         isPartiallyCorrect ? 'Partially correct.' : 
+                         'No constructions identified correctly.';
+    
+    const encouragementMessage = isAllCorrect ? 'Excellent work! You identified all constructions correctly.' :
+                                isPartiallyCorrect ? 'Good progress! You correctly identified some constructions.' :
+                                'Keep practicing to improve your construction identification skills.';
+
+    // Record overall question result using enhanced validation
     const overallValidation: ConstructionValidation = {
       constructionId: 'overall-question-validation',
-      isCorrect: allCorrect && foundConstructions >= totalConstructions,
+      isCorrect: isAllCorrect,
       userAnswer: {
         constructionId: 'overall-question-validation',
         selectedIndices: state.submittedConstructions.flatMap(c => c.indices),
         selectedType: state.submittedConstructions[0]?.constructionType || 'mudaf-mudaf-ilayh',
         timestamp: Date.now()
       },
-      correctAnswer: state.quizState.currentQuestion.correctAnswers[0] || {
+      correctAnswer: supportedConstructions[0] || {
         id: 'demo-construction',
         type: 'mudaf-mudaf-ilayh',
         spans: [],
@@ -260,13 +289,12 @@ export function useGrammarQuizManager() {
         explanation: 'Demo construction for validation'
       },
       feedback: {
-        message: allCorrect && foundConstructions >= totalConstructions
-          ? 'Excellent! You found all grammatical constructions correctly.'
-          : `Found ${foundConstructions}/${totalConstructions} constructions. ${allCorrect ? 'All correct!' : 'Some incorrect.'}`,
-        explanation: `This verse contains ${totalConstructions} grammatical construction(s).`,
-        encouragement: allCorrect ? 'Great grammatical analysis!' : 'Keep practicing!'
+        message: lastValidation?.feedback.message || 
+                `This verse contains ${totalConstructions} supported construction${totalConstructions !== 1 ? 's' : ''}. Score: ${correctlyIdentified}/${totalConstructions} identified (${proportionalScore}%) - ${statusMessage}`,
+        explanation: lastValidation?.feedback.explanation || `Analysis of ${totalConstructions} supported grammatical construction${totalConstructions !== 1 ? 's' : ''}.`,
+        encouragement: encouragementMessage
       },
-      score: allCorrect && foundConstructions >= totalConstructions ? 100 : Math.round((foundConstructions / totalConstructions) * 70)
+      score: proportionalScore
     };
 
     currentValidation.current = overallValidation;

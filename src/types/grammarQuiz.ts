@@ -11,11 +11,82 @@ import { MorphologicalDetails } from './morphology';
 // Core Construction Types
 export type ConstructionType = 'mudaf-mudaf-ilayh' | 'jar-majroor' | 'fil-fail' | 'harf-nasb-ismuha';
 
-/**
- * Classification of construction types by interaction model
- */
+// Construction taxonomy
 export type SimpleConstructionType = 'mudaf-mudaf-ilayh' | 'jar-majroor';
 export type RoleBasedConstructionType = 'fil-fail' | 'harf-nasb-ismuha';
+
+// =====================
+// GRANULAR COMPONENT SELECTION TYPES
+// =====================
+
+// Component roles for granular selection
+export type ComponentRole = 
+  | 'mudaf'           // First part of Iḍāfa
+  | 'mudaf-ilayh'     // Second part of Iḍāfa  
+  | 'jar'             // Preposition in Jar wa Majrūr
+  | 'majroor'         // Noun after preposition
+  | 'fil'             // Verb in Fiʿl–Fāʿil
+  | 'fail'            // Doer/subject in Fiʿl–Fāʿil
+  | 'harf-nasb'       // Harf Nasb particle
+  | 'ismuha';         // Noun after Harf Nasb
+
+// Component selection for individual words
+export interface ComponentSelection {
+  wordIndex: number;        // Index of selected word in verse
+  wordId: string;          // Unique word identifier
+  role: ComponentRole;     // Assigned grammatical role
+  constructionId?: string; // Links components of same construction
+}
+
+// Construction formed by component pairs/groups
+export interface ComponentConstruction {
+  id: string;
+  type: ConstructionType;
+  components: ComponentSelection[];  // All components in this construction
+  isComplete: boolean;              // Whether all required components are selected
+}
+
+// User answer with granular component selection
+export interface ComponentAnswer {
+  questionId: string;
+  selectedComponents: ComponentSelection[];     // Individual word-role assignments
+  constructions: ComponentConstruction[];       // Formed constructions
+  timestamp: number;
+}
+
+// =====================
+// COMPONENT ROLE CONFIGURATION
+// =====================
+
+// Required component roles for each construction type
+export const CONSTRUCTION_COMPONENT_ROLES: Record<ConstructionType, ComponentRole[]> = {
+  'mudaf-mudaf-ilayh': ['mudaf', 'mudaf-ilayh'],
+  'jar-majroor': ['jar', 'majroor'],
+  'fil-fail': ['fil', 'fail'],
+  'harf-nasb-ismuha': ['harf-nasb', 'ismuha']
+};
+
+// Simple display names for component roles
+export const COMPONENT_ROLE_NAMES: Record<ComponentRole, string> = {
+  'mudaf': 'Mudaf',
+  'mudaf-ilayh': 'Mudaf Ilayh', 
+  'jar': 'Jar',
+  'majroor': 'Majroor',
+  'fil': 'Fiʿl',
+  'fail': 'Fāʿil',
+  'harf-nasb': 'Harf Nasb',
+  'ismuha': 'Ismuha'
+};
+
+// Helper to get construction type from component role
+export function getConstructionTypeForRole(role: ComponentRole): ConstructionType {
+  for (const [constructionType, roles] of Object.entries(CONSTRUCTION_COMPONENT_ROLES)) {
+    if (roles.includes(role)) {
+      return constructionType as ConstructionType;
+    }
+  }
+  throw new Error(`No construction type found for role: ${role}`);
+}
 
 /**
  * Steps in the role assignment process for role-based constructions

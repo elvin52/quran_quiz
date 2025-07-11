@@ -31,14 +31,14 @@ export const enhancedColorScheme: EnhancedColorScheme = {
     'DET': '#DDA0DD',      // Plum for determiners
     'NUM': '#F0E68C',      // Khaki for numbers
     'ADV': '#FFB6C1',      // Light pink for adverbs
-    'default': '#f9f9f9'   // Light gray for unknown
+    'default': '#ffffff'   // Light gray for unknown
   },
   
   case: {
     'nominative': '#00FF7F',    // Spring green
     'accusative': '#FF4500',    // Orange red
     'genitive': '#8A2BE2',      // Blue violet
-    'default': '#f9f9f9'
+    'default': '#ffffff'
   },
   
   tense: {
@@ -46,13 +46,13 @@ export const enhancedColorScheme: EnhancedColorScheme = {
     'present': '#20B2AA',       // Light sea green
     'future': '#9370DB',        // Medium purple
     'imperative': '#DC143C',    // Crimson
-    'default': '#f9f9f9'
+    'default': '#ffffff'
   },
   
   voice: {
     'active': '#228B22',        // Forest green
     'passive': '#B22222',       // Fire brick
-    'default': '#f9f9f9'
+    'default': '#ffffff'
   },
   
   syntacticRole: {
@@ -62,7 +62,7 @@ export const enhancedColorScheme: EnhancedColorScheme = {
     'modifier': '#9932CC',      // Dark orchid
     'complement': '#FF6347',    // Tomato
     'adjunct': '#32CD32',       // Lime green
-    'default': '#f9f9f9'
+    'default': '#ffffff'
   }
 };
 
@@ -105,7 +105,7 @@ export const getSegmentColor = (
       case 'adjective':
         return '#FF6347'; // Tomato red for adjective roots
       default:
-        return '#f9f9f9';
+        return '#ffffff'; // White as default text color
     }
   }
 };

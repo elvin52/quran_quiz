@@ -25,8 +25,10 @@ import {
   ArrowRight
 } from 'lucide-react';
 import { useGrammarQuizManager } from '@/hooks/useGrammarQuizManager';
+import { useComponentSelection } from '@/hooks/useComponentSelection';
 import { QuranVerseDisplay } from './QuranVerseDisplay';
 import { RelationshipSelector } from './RelationshipSelector';
+import { ComponentSelector } from './ComponentSelector';
 import { GrammarQuizFeedback } from './GrammarQuizFeedback';
 import { QuizSettings } from '../QuizSettings';
 import { SessionSummary } from '../SessionSummary';
@@ -57,6 +59,14 @@ export function GrammarQuizPage({ className }: GrammarQuizPageProps) {
     getCurrentStatistics,
     getAllSelectedIndices
   } = useGrammarQuizManager();
+
+  // Component selection for granular mode
+  const componentSelection = useComponentSelection(
+    quizState.currentQuestion?.segments || []
+  );
+  
+  // Toggle between construction and component selection modes
+  const [selectionMode, setSelectionMode] = useState<'construction' | 'component'>('construction');
 
   const progress = quizState.progress;
   const questionNumber = currentSession ? currentSession.questions.length + 1 : 0;
@@ -238,8 +248,8 @@ export function GrammarQuizPage({ className }: GrammarQuizPageProps) {
             {/* Quranic Verse with Visual Word Marking */}
             <QuranVerseDisplay
               segments={quizState.currentQuestion.segments}
-              selectedIndices={selectedIndices}
-              onWordClick={toggleWordSelection}
+              selectedIndices={selectionMode === 'construction' ? selectedIndices : componentSelection.state.selectedWordIndices}
+              onWordClick={selectionMode === 'construction' ? toggleWordSelection : componentSelection.toggleWordSelection}
               disabled={quizState.isLoading}
               verseMetadata={{
                 surahId: quizState.currentQuestion.quranMetadata?.surahId || 0,
@@ -248,14 +258,54 @@ export function GrammarQuizPage({ className }: GrammarQuizPageProps) {
                 verseId: quizState.currentQuestion.quranMetadata?.verseId || 0,
                 translation: quizState.currentQuestion.quranMetadata?.translation || ''
               }}
+              wordRoles={selectionMode === 'component' ? 
+                Object.fromEntries(
+                  componentSelection.state.assignedComponents.map(comp => [comp.wordIndex, comp.role])
+                ) : undefined
+              }
+              showRoleIndicators={selectionMode === 'component'}
             />
 
-            {/* Construction Type Selector */}
-            <RelationshipSelector
-              selectedType={selectedConstructionType}
-              onTypeSelect={selectConstructionType}
-              disabled={quizState.isLoading}
-            />
+            {/* Selection Mode Toggle */}
+            <Card className="mb-4">
+              <CardContent className="pt-6">
+                <div className="flex justify-center gap-2">
+                  <Button
+                    variant={selectionMode === 'construction' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setSelectionMode('construction')}
+                  >
+                    Construction Mode
+                  </Button>
+                  <Button
+                    variant={selectionMode === 'component' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setSelectionMode('component')}
+                  >
+                    Component Mode
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Component Role Selector - Granular Mode */}
+            {selectionMode === 'component' && (
+              <ComponentSelector
+                selectedRole={componentSelection.state.currentRole}
+                onRoleSelect={componentSelection.selectRole}
+                selectedWordCount={componentSelection.state.selectedWordIndices.length}
+                disabled={quizState.isLoading}
+              />
+            )}
+
+            {/* Construction Type Selector - Traditional Mode */}
+            {selectionMode === 'construction' && (
+              <RelationshipSelector
+                selectedType={selectedConstructionType}
+                onTypeSelect={selectConstructionType}
+                disabled={quizState.isLoading}
+              />
+            )}
 
             {/* Submitted Constructions Summary */}
             {submittedConstructions.length > 0 && (
@@ -285,6 +335,23 @@ export function GrammarQuizPage({ className }: GrammarQuizPageProps) {
                   </div>
                 </CardContent>
               </Card>
+            )}
+
+            {/* Component Mode Actions */}
+            {selectionMode === 'component' && componentSelection.state.selectedWordIndices.length > 0 && componentSelection.state.currentRole && (
+              <div className="flex justify-center">
+                <Button
+                  onClick={() => {
+                    componentSelection.assignRoleToSelectedWords();
+                    componentSelection.clearWordSelection();
+                  }}
+                  disabled={quizState.isLoading}
+                  className="bg-blue-600 hover:bg-blue-700"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Assign {componentSelection.state.currentRole} Role
+                </Button>
+              </div>
             )}
 
             {/* Action Buttons */}

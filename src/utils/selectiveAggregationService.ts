@@ -86,12 +86,12 @@ const PRONOUNS_SEPARATE = {
  */
 const ATTACHABLE_MORPHOLOGY = {
   // Definite article - Always attach (purely morphological)
-  definiteArticle: ['ال', 'الْ'],
+  definiteArticle: ['ال', 'الْ', 'ٱل'],
   
   // Morphological prefixes that should attach to stems
   morphologicalPrefixes: {
     // Definite article prefixes
-    definiteArticle: ['ال', 'الْ'],
+    definiteArticle: ['ال', 'الْ', 'ٱل'],
     // Imperfect verb prefixes (person/number/gender marking)
     verbalPrefixes: ['يَ', 'تَ', 'أَ', 'نَ', 'ن'], // Based on MASAQ.csv IMPERF_PREF
     // Prepositional prefixes (when morphological, not syntactic)
@@ -133,32 +133,54 @@ export class SelectiveAggregationService {
    * Apply linguistically-aware selective aggregation based on comprehensive taxonomy
    */
   aggregateSegments(segments: MorphologicalDetails[]): AggregatedSegment[] {
+    console.log('🔄 AGGREGATION START - Processing', segments.length, 'segments');
     const aggregated: AggregatedSegment[] = [];
     let i = 0;
     
     while (i < segments.length) {
       const currentSegment = segments[i];
+      const nextSegment = segments[i + 1];
+      
+      console.log(`\n📍 Processing segment ${i}: "${currentSegment.text}" (${currentSegment.morphology})`);
+      
+      // Debug definite articles specifically
+      if (currentSegment.text.trim() === 'ٱل' || currentSegment.text.trim() === 'ال') {
+        console.log('🔍 DEFINITE ARTICLE DETECTED!');
+        console.log('  - hasSyntacticFunction:', this.hasSyntacticFunction(currentSegment));
+        if (nextSegment) {
+          console.log('  - shouldAttachToNext:', this.shouldAttachToNext(currentSegment, nextSegment));
+          console.log('  - Next segment:', nextSegment.text, '(', nextSegment.morphology, ')');
+        }
+      }
       
       // RULE 1: Independent syntactic function → Keep separate
       if (this.hasSyntacticFunction(currentSegment)) {
+        console.log('  ❌ RULE 1: Keeping separate (syntactic function)');
         aggregated.push(this.createStandaloneSegment(currentSegment));
         i++;
         continue;
       }
       
       // RULE 2: Purely morphological → Attach to next word
-      const nextSegment = segments[i + 1];
       if (nextSegment && this.shouldAttachToNext(currentSegment, nextSegment)) {
+        console.log('  ✅ RULE 2: Attaching to next segment');
         const attachedSegments = this.collectAttachedSegments(segments, i);
+        console.log('  📎 Collected', attachedSegments.length, 'attached segments:', attachedSegments.map(s => s.text).join(' + '));
         aggregated.push(this.createAggregatedSegment(attachedSegments));
         i += attachedSegments.length;
         continue;
       }
       
       // RULE 3: Default → Standalone segment
+      console.log('  ⭕ RULE 3: Default standalone');
       aggregated.push(this.createStandaloneSegment(currentSegment));
       i++;
     }
+    
+    console.log('🎯 AGGREGATION COMPLETE:', aggregated.length, 'aggregated segments');
+    aggregated.forEach((seg, idx) => {
+      console.log(`  ${idx}: "${seg.text}" (${seg.originalSegments.length} original segments)`);
+    });
     
     return aggregated;
   }
@@ -223,6 +245,18 @@ export class SelectiveAggregationService {
     
     // Particles classified as 'particle' morphology
     if (segment.morphology === 'particle') {
+      // EXCEPTION: Definite article should attach to nouns (purely morphological)
+      // Check for definite article patterns including Unicode variants
+      const isDefiniteArticle = 
+        ATTACHABLE_MORPHOLOGY.definiteArticle.includes(text) ||
+        ATTACHABLE_MORPHOLOGY.morphologicalPrefixes.definiteArticle.includes(text) ||
+        text === 'ٱل' || text === 'ال' || text === 'الْ'; // Include Unicode variants
+      
+      if (isDefiniteArticle) {
+        console.log(' DEFINITE ARTICLE EXCEPTION TRIGGERED for:', text);
+        return false; // Definite article should attach, not remain separate
+      }
+      
       // EXCEPTION: Morphological verbal prefixes should attach, not remain separate
       if (segment.type === 'prefix' && ATTACHABLE_MORPHOLOGY.morphologicalPrefixes.verbalPrefixes.includes(text)) {
         return false; // These are morphological, should attach to verb
@@ -258,8 +292,12 @@ export class SelectiveAggregationService {
     const currentText = current.text.trim();
     
     // Definite article attachment (purely morphological)
-    if (ATTACHABLE_MORPHOLOGY.morphologicalPrefixes.definiteArticle.includes(currentText) && 
-        next.morphology === 'noun') {
+    const isDefiniteArticle = 
+      ATTACHABLE_MORPHOLOGY.morphologicalPrefixes.definiteArticle.includes(currentText) ||
+      currentText === 'ٱل' || currentText === 'ال' || currentText === 'الْ';
+    
+    if (isDefiniteArticle && (next.morphology === 'noun' || next.morphology === 'adjective')) {
+      console.log('🔗 ATTACHING DEFINITE ARTICLE:', currentText, 'to', next.text);
       return true;
     }
     
@@ -421,44 +459,6 @@ export class SelectiveAggregationService {
     };
     
     return [baseSegment, pronounSegment];
-  }
-  
-  /**
-   * Aggregate segments with selective morphological attachment
-   */
-  public aggregateSegments(segments: MorphologicalDetails[]): AggregatedSegment[] {
-    const result: AggregatedSegment[] = [];
-    let i = 0;
-    
-    while (i < segments.length) {
-      const current = segments[i];
-      
-      // FIRST: Check if this segment contains attached pronouns that need separation
-      const attachedPronounCheck = this.shouldSeparateAttachedPronoun(current);
-      if (attachedPronounCheck.shouldSeparate && attachedPronounCheck.parts) {
-        const separatedSegments = this.createSeparatedPronouns(current, attachedPronounCheck.parts, i);
-        result.push(...separatedSegments);
-        i++;
-        continue;
-      }
-      
-      // SECOND: Check if this segment should attach to next segments
-      const attachmentChain = this.collectAttachedSegments(segments, i);
-      
-      if (attachmentChain.length > 1) {
-        // Create aggregated segment
-        const aggregated = this.createAggregatedSegment(attachmentChain);
-        result.push(aggregated);
-        i += attachmentChain.length;
-      } else {
-        // Create standalone segment
-        const standalone = this.createStandaloneSegment(current);
-        result.push(standalone);
-        i++;
-      }
-    }
-    
-    return result;
   }
   
   /**

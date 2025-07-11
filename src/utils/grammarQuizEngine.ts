@@ -17,10 +17,52 @@ import {
   GrammarQuizSession,
   QuizSettings,
   QuestionResult,
-  QuizStatistics
+  QuizStatistics,
+  ConstructionType
 } from '@/types/grammarQuiz';
 import { roleBasedSampleQuestions, RoleBasedQuestionGenerator } from '../data/sampleRoleBasedQuestions';
 import { surahData } from '@/data/surahData';
+
+/**
+ * Supported construction types for the grammar quiz
+ * These are the only 4 construction types that should be included in quiz questions
+ */
+const SUPPORTED_CONSTRUCTION_TYPES: ConstructionType[] = [
+  'mudaf-mudaf-ilayh',  // Iḍāfa (إضافة)
+  'jar-majroor',        // Jar wa Majrūr
+  'fil-fail',           // Fiʿl–Fāʿil
+  'harf-nasb-ismuha'    // Harf Nasb + Ismuha
+];
+
+/**
+ * Configuration for construction types with display names and descriptions
+ */
+const CONSTRUCTION_CONFIG: Record<ConstructionType, {
+  englishName: string;
+  arabicName: string;
+  description: string;
+}> = {
+  'mudaf-mudaf-ilayh': {
+    englishName: 'Iḍāfa',
+    arabicName: 'إضافة',
+    description: 'Possessive construction (Mudaf-Mudaf Ilayh)'
+  },
+  'jar-majroor': {
+    englishName: 'Jar wa Majrūr',
+    arabicName: 'جار ومجرور',
+    description: 'Prepositional phrase (Jar-Majroor)'
+  },
+  'fil-fail': {
+    englishName: 'Fiʿl–Fāʿil',
+    arabicName: 'فعل وفاعل',
+    description: 'Verb and subject construction (Fiʿl-Fāʿil)'
+  },
+  'harf-nasb-ismuha': {
+    englishName: 'Harf Nasb + Ismuha',
+    arabicName: 'حرف نصب واسمها',
+    description: 'Accusative particle and its governed word (Harf Naṣb-Ismuha)'
+  }
+};
 
 export class GrammarQuizEngine {
   private idafaDetector: IdafaDetector;
@@ -117,11 +159,16 @@ export class GrammarQuizEngine {
     console.log('🎯 Starting Grammar Quiz session');
     
     const session: GrammarQuizSession = {
-      id: `grammar-session-${Date.now()}`,
+      sessionId: `grammar-session-${Date.now()}`,
       startTime: new Date(),
       settings,
       questions: [],
-      statistics: this.initializeStatistics()
+      currentQuestionIndex: 0,
+      statistics: this.initializeStatistics(),
+      metadata: {
+        version: '1.0.0',
+        totalPauseTimeMs: 0
+      }
     };
 
     this.currentSession = session;
@@ -151,81 +198,127 @@ export class GrammarQuizEngine {
   }
 
   /**
-   * Detect grammar constructions in a verse
+   * Detect only the 4 supported grammar constructions in a verse
+   * COMPLETELY BYPASS detectGrammaticalRelationships to avoid detecting 15+ unwanted relationships
    */
   private async detectConstructionsInVerse(segments: Record<string, MorphologicalDetails>): Promise<GrammarConstruction[]> {
+    console.log('🚀 CRITICAL FIX: SELECTIVE DETECTION OF ONLY 4 SUPPORTED TYPES');
+    console.log(`💡 VERSE SEGMENTS: ${Object.keys(segments).length}`);
+    console.log(`🎯 TARGET: Detect ONLY our 4 supported construction types, bypass all others`);
+    
     const constructions: GrammarConstruction[] = [];
     const segmentArray = Object.values(segments);
     
     try {
-      // Detect Mudaf-Mudaf Ilayh constructions using existing detector
+      // 1. ✅ ONLY Detect Iḍāfa (mudaf-mudaf-ilayh) constructions
+      console.log('🔍 1. Detecting Iḍāfa constructions...');
       const idafaResult = this.idafaDetector.detectIdafaConstructions(segments);
-      console.log(`Found ${idafaResult.constructions.length} Idafa constructions`);
+      const validIdafaConstructions = idafaResult.constructions.filter(c => c.mudaf && c.mudafIlayh);
+      console.log(`✅ Found ${validIdafaConstructions.length} valid Iḍāfa constructions`);
       
-      // Add Mudaf-Mudaf Ilayh constructions
-      idafaResult.constructions.forEach((idafa, index) => {
+      validIdafaConstructions.forEach((idafa, index) => {
         const construction = this.convertIdafaToConstruction(idafa, segmentArray, index);
+        construction.type = 'mudaf-mudaf-ilayh';
         constructions.push(construction);
+        console.log(`  + Added Iḍāfa: ${construction.id}`);
       });
       
-      // Detect Jar-Majroor relationships using existing detector
-      const enhancedSegments = detectGrammaticalRelationships(segments);
+      // 2. ✅ ONLY Detect Jar wa Majrūr using SELECTIVE detection
+      console.log('🔍 2. Detecting Jar wa Majrūr constructions...');
+      const jarMajroorConstructions = this.detectJarMajroorSelectively(segments);
+      console.log(`✅ Found ${jarMajroorConstructions.length} Jar wa Majrūr constructions`);
       
-      // Extract Jar-Majroor relationships from enhanced segments
-      const jarMajroorRelationships = this.extractJarMajroorRelationships(enhancedSegments);
-      console.log(`Found ${jarMajroorRelationships.length} Jar-Majroor relationships`);
-      
-      // Add Jar-Majroor constructions
-      jarMajroorRelationships.forEach((relationship, index) => {
-        const construction = this.convertJarMajroorToConstruction(relationship, segmentArray, index);
+      jarMajroorConstructions.forEach(construction => {
+        construction.type = 'jar-majroor';
         constructions.push(construction);
+        console.log(`  + Added Jar wa Majrūr: ${construction.id}`);
       });
       
-      // Extract Mawsoof-Sifah relationships (الموصوف والصفة) from enhanced segments
-      const mawsoofSifahRelationships = this.extractMawsoofSifahRelationships(enhancedSegments);
-      console.log(`Found ${mawsoofSifahRelationships.length} Mawsoof-Sifah relationships`);
+      // 3. ✅ ONLY Detect Fiʿl–Fāʿil using SELECTIVE detection
+      console.log('🔍 3. Detecting Fiʿl–Fāʿil constructions...');
+      const fi3lFa3ilConstructions = this.detectFi3lFa3ilSelectively(segments);
+      console.log(`✅ Found ${fi3lFa3ilConstructions.length} Fiʿl–Fāʿil constructions`);
       
-      // Add Mawsoof-Sifah constructions
-      mawsoofSifahRelationships.forEach((relationship, index) => {
-        const construction = this.convertMawsoofSifahToConstruction(relationship, segmentArray, index);
+      fi3lFa3ilConstructions.forEach(construction => {
+        construction.type = 'fil-fail';
         constructions.push(construction);
+        console.log(`  + Added Fiʿl–Fāʿil: ${construction.id}`);
       });
       
-      // Extract Fi3l-Fa3il relationships (الفعل والفاعل) from enhanced segments
-      const fi3lFa3ilRelationships = this.extractFi3lFa3ilRelationships(enhancedSegments);
-      console.log(`Found ${fi3lFa3ilRelationships.length} Fi3l-Fa3il relationships`);
+      // 4. ✅ ONLY Detect Harf Nasb + Ismuha using SELECTIVE detection
+      console.log('🔍 4. Detecting Harf Nasb + Ismuha constructions...');
+      const harfNasbConstructions = this.detectHarfNasbIsmuhaSelectively(segments);
+      console.log(`✅ Found ${harfNasbConstructions.length} Harf Nasb + Ismuha constructions`);
       
-      // Add Fi3l-Fa3il constructions
-      fi3lFa3ilRelationships.forEach((relationship, index) => {
-        const construction = this.convertFi3lFa3ilToConstruction(relationship, segmentArray, index);
+      harfNasbConstructions.forEach(construction => {
+        construction.type = 'harf-nasb-ismuha';
         constructions.push(construction);
+        console.log(`  + Added Harf Nasb + Ismuha: ${construction.id}`);
       });
       
     } catch (error) {
-      console.warn('Error detecting constructions:', error);
+      console.error('❌ Error in selective detection:', error);
     }
     
-    return constructions;
+    // Final validation: ensure we only have our 4 supported types
+    const finalConstructions = constructions.filter(c => 
+      SUPPORTED_CONSTRUCTION_TYPES.includes(c.type)
+    );
+    
+    console.log(`🎆 FINAL RESULT: ${finalConstructions.length} constructions of ONLY supported types`);
+    finalConstructions.forEach((c, i) => {
+      console.log(`  ${i+1}. ${c.type}: ${CONSTRUCTION_CONFIG[c.type].englishName}`);
+    });
+    
+    if (finalConstructions.length !== constructions.length) {
+      console.warn(`⚠️ Filtered out ${constructions.length - finalConstructions.length} unsupported constructions`);
+    }
+    
+    return finalConstructions;
   }
 
   /**
    * Find verses that contain grammatical constructions
+   * Only returns verses containing at least one of the 4 supported construction types
    */
   private async findVersesWithConstructions(): Promise<typeof this.quranVerseBank> {
     const versesWithConstructions = [];
     
+    console.log('🔍 Filtering verses for supported grammatical constructions...');
+    console.log(`Supported types: ${SUPPORTED_CONSTRUCTION_TYPES.map(t => CONSTRUCTION_CONFIG[t].englishName).join(', ')}`);
+    
     for (const verse of this.quranVerseBank) {
       try {
         const constructions = await this.detectConstructionsInVerse(verse.segments);
-        if (constructions.length > 0) {
-          versesWithConstructions.push(verse);
+        
+        // Filter to only include supported construction types
+        const supportedConstructions = constructions.filter(c => 
+          SUPPORTED_CONSTRUCTION_TYPES.includes(c.type)
+        );
+        
+        // CRITICAL: Only include verses that have at least one supported construction
+        // This prevents verses with unsupported constructions from causing NaN scores
+        if (supportedConstructions.length > 0) {
+          // Double-check: ensure all constructions are actually supported
+          const allSupported = supportedConstructions.every(c => 
+            SUPPORTED_CONSTRUCTION_TYPES.includes(c.type)
+          );
+          
+          if (allSupported) {
+            versesWithConstructions.push(verse);
+            console.log(`✅ Verse ${verse.surahName} ${verse.verseId} - Found ${supportedConstructions.length} constructions: ${supportedConstructions.map(c => CONSTRUCTION_CONFIG[c.type].englishName).join(', ')}`);
+          } else {
+            console.log(`❌ Verse ${verse.surahName} ${verse.verseId} - Contains unsupported constructions, excluding`);
+          }
+        } else {
+          console.log(`❌ Verse ${verse.surahName} ${verse.verseId} - No supported constructions found, excluding`);
         }
       } catch (error) {
-        console.warn(`Error checking constructions in ${verse.surahName} ${verse.verseId}:`, error);
+        console.warn(`⚠️ Error checking constructions in ${verse.surahName} ${verse.verseId}:`, error);
       }
     }
     
-    console.log(`Found ${versesWithConstructions.length} verses with grammar constructions`);
+    console.log(`📊 Filtered to ${versesWithConstructions.length} verses with supported constructions out of ${this.quranVerseBank.length} total verses`);
     return versesWithConstructions;
   }
 
@@ -236,10 +329,21 @@ export class GrammarQuizEngine {
     verse: typeof this.quranVerseBank[0],
     config: Partial<QuizGenerationConfig>
   ): Promise<GrammarQuizQuestion> {
+    console.log('🎯 === CRITICAL DEBUG: createQuestionFromVerse ===');
+    console.log(`📖 Verse: ${verse.surahName} ${verse.verseId}`);
+    console.log(`📝 Segments count: ${Object.keys(verse.segments).length}`);
+    
     const segmentArray = Object.values(verse.segments);
     
     // Detect grammar constructions in the verse
+    console.log('🔍 About to call detectConstructionsInVerse...');
     const correctAnswers = await this.detectConstructionsInVerse(verse.segments);
+    console.log(`🎯 CRITICAL: detectConstructionsInVerse returned ${correctAnswers.length} constructions`);
+    
+    // Log each construction type for debugging
+    correctAnswers.forEach((answer, i) => {
+      console.log(`  ${i+1}. Type: ${answer.type}, ID: ${answer.id}`);
+    });
     
     if (correctAnswers.length === 0) {
       throw new Error(`No grammar constructions detected in ${verse.surahName} ${verse.verseId}`);
@@ -270,124 +374,166 @@ export class GrammarQuizEngine {
       }
     };
     
-    console.log(`✅ Generated question with ${correctAnswers.length} constructions (${difficulty})`);
+    console.log(`✅ FINAL QUESTION: Generated with ${correctAnswers.length} constructions (${difficulty})`);
+    console.log(`📊 Question correctAnswers length: ${question.correctAnswers.length}`);
     return question;
   }
 
   /**
-   * Validate user's answer against correct constructions
+   * Validate user's answer with proportional scoring and detailed feedback
+   * Shows exactly which constructions were present and which were correctly identified
    */
   validateAnswer(
     question: GrammarQuizQuestion,
     userSelection: UserSelection
   ): ConstructionValidation {
-    console.log('🔍 Validating user answer...');
+    console.log('🚀 CRITICAL DEBUGGING: validateAnswer ENTRY POINT');
+    console.log(`💡 Question ID: ${question.id}`);
+    console.log(`💡 User selection type: ${userSelection.relationshipType}`); 
+    console.log(`💡 Total correctAnswers in question: ${question.correctAnswers.length}`);
+    
+    // Log all constructions in the question to debug the "8 constructions" issue
+    console.log(`📊 ALL CONSTRUCTIONS IN QUESTION:`);
+    question.correctAnswers.forEach((c, i) => {
+      console.log(`  ${i+1}. ${c.type} ${SUPPORTED_CONSTRUCTION_TYPES.includes(c.type) ? '✅' : '❌'}`); 
+    });
     
     const { selectedIndices, relationshipType, roleBasedSelection } = userSelection;
     
     // Handle role-based constructions (Fiʿl-Fāʿil, Harf Naṣb-Ismuha)
     if (roleBasedSelection && (relationshipType === 'fil-fail' || relationshipType === 'harf-nasb-ismuha')) {
+      console.log('🎯 Using role-based validation for', relationshipType);
       return this.validateRoleBasedAnswer(question, userSelection);
     }
     
-    // Find matching constructions of the selected type
-    const relevantConstructions = question.correctAnswers.filter(
-      c => c.type === relationshipType
+    // STRICT FILTERING: Only include our 4 supported construction types
+    // This is the core fix to prevent "Found 1/8 constructions" problem
+    const allConstructions = question.correctAnswers.filter(c => 
+      SUPPORTED_CONSTRUCTION_TYPES.includes(c.type)
     );
     
-    if (relevantConstructions.length === 0) {
-      return {
-        constructionId: 'no-construction-found',
-        isCorrect: false,
-        userAnswer: {
-          constructionId: 'user-answer',
-          selectedIndices,
-          selectedType: relationshipType,
-          timestamp: Date.now()
-        },
-        correctAnswer: {
-          id: 'no-correct-answer',
-          type: relationshipType,
-          spans: [],
-          roles: [],
-          certainty: 'inferred',
-          explanation: 'No construction found'
-        },
-        feedback: {
-          message: `No ${this.formatConstructionType(relationshipType)} constructions found in this fragment.`,
-          explanation: 'Try selecting a different relationship type or different words.',
-          encouragement: `Look for ${relationshipType === 'mudaf-mudaf-ilayh' ? 'possessive' : 'prepositional'} constructions`
-        },
-        score: 0
-      };
+    console.log(`✅ FILTERED: ${allConstructions.length}/${question.correctAnswers.length} supported constructions`);
+    allConstructions.forEach((c, i) => {
+      console.log(`  ${i+1}. ${c.type}: ${CONSTRUCTION_CONFIG[c.type].englishName}`); 
+    });
+    
+    // Group constructions by type for detailed feedback
+    const constructionsByType = this.groupConstructionsByType(allConstructions);
+    
+    // Build detailed feedback about each construction type present
+    const constructionFeedback: Array<{
+      type: ConstructionType;
+      name: string;
+      present: boolean;
+      userIdentified: boolean;
+      correct: boolean;
+    }> = [];
+    
+    let totalConstructions = 0;
+    let correctlyIdentified = 0;
+    
+    // Check each supported construction type that's actually present in the verse
+    SUPPORTED_CONSTRUCTION_TYPES.forEach(type => {
+      const constructionsOfType = constructionsByType[type] || [];
+      const isPresent = constructionsOfType.length > 0;
+      
+      if (isPresent) {
+        totalConstructions++;
+        
+        // Check if user identified this type correctly
+        const userIdentified = relationshipType === type;
+        let correct = false;
+        
+        if (userIdentified) {
+          // Check if user's selection matches any construction of this type
+          correct = constructionsOfType.some(construction => 
+            this.arraysEqual(construction.spans.sort(), selectedIndices.sort())
+          );
+          
+          if (correct) {
+            correctlyIdentified++;
+          }
+        }
+        
+        constructionFeedback.push({
+          type,
+          name: CONSTRUCTION_CONFIG[type].englishName,
+          present: true,
+          userIdentified,
+          correct
+        });
+      }
+    });
+    
+    console.log(`📊 FEEDBACK DATA:`);
+    console.log(`  Total supported constructions: ${totalConstructions}`);
+    console.log(`  Correctly identified: ${correctlyIdentified}`);
+    console.log(`  Construction feedback:`, constructionFeedback);
+    
+    // Calculate score based on proportion of correctly identified constructions
+    // Safety check to avoid division by zero
+    const score = totalConstructions > 0 ? 
+      Math.round((correctlyIdentified / totalConstructions) * 100) : 
+      0;
+      
+    console.log(`💰 FINAL SCORE: ${correctlyIdentified}/${totalConstructions} = ${score}%`);
+    
+    // Determine correctness status for feedback
+    const isCorrect = score === 100;
+    const isPartiallyCorrect = score > 0 && score < 100;
+    
+    // Build feedback message with appropriate status
+    const feedbackLines = [`This verse contains ${totalConstructions} supported construction${totalConstructions !== 1 ? 's' : ''}:`];
+    
+    constructionFeedback.forEach(feedback => {
+      if (feedback.present) {
+        const status = feedback.correct ? '✅' : (feedback.userIdentified ? '❌' : '➖');
+        const message = feedback.correct ? 'Correct' : 
+                       feedback.userIdentified ? 'Incorrect' : 'Not identified';
+        feedbackLines.push(`${status} ${feedback.name} – ${message}`);
+      }
+    });
+    
+    // Add proportional score info with clear status message
+    if (totalConstructions > 0) {
+      const statusMessage = isCorrect ? 'All correct!' : 
+                           isPartiallyCorrect ? 'Partially correct.' : 
+                           'No constructions identified correctly.';
+      feedbackLines.push(`Score: ${correctlyIdentified}/${totalConstructions} construction${totalConstructions !== 1 ? 's' : ''} identified (${score}%) - ${statusMessage}`);
+    } else {
+      feedbackLines.push(`No supported constructions found in this verse.`);
     }
     
-    // Check for exact matches
-    const exactMatch = relevantConstructions.find(construction => 
-      this.arraysEqual(construction.spans.sort(), selectedIndices.sort())
-    );
+    const feedbackMessage = feedbackLines.join('\n');
     
-    if (exactMatch) {
-      return {
-        constructionId: exactMatch.id,
-        isCorrect: true,
-        userAnswer: {
-          constructionId: exactMatch.id,
-          selectedIndices: userSelection.selectedIndices,
-          selectedType: userSelection.relationshipType,
-          timestamp: Date.now()
-        },
-        correctAnswer: exactMatch,
-        feedback: {
-          message: '🎉 Excellent! Perfect identification.',
-          explanation: exactMatch.explanation,
-          encouragement: 'You correctly identified the grammatical construction!'
-        },
-        score: 100
-      };
-    }
+    // Find the best construction for detailed explanation
+    const targetConstruction = allConstructions.find(c => c.type === relationshipType) || allConstructions[0];
     
-    // Check for partial matches
-    const partialMatch = this.findBestPartialMatch(relevantConstructions, selectedIndices);
-    
-    if (partialMatch.score > 0.3) {
-      return {
-        constructionId: partialMatch.construction.id,
-        isCorrect: false,
-        userAnswer: {
-          constructionId: partialMatch.construction.id,
-          selectedIndices: userSelection.selectedIndices,
-          selectedType: userSelection.relationshipType,
-          timestamp: Date.now()
-        },
-        correctAnswer: partialMatch.construction,
-        feedback: {
-          message: `🔶 Partially correct! ${Math.round(partialMatch.score * 100)}% accuracy.`,
-          explanation: partialMatch.construction.explanation,
-          encouragement: 'Review the highlighted words and their relationships.'
-        },
-        score: Math.round(partialMatch.score * 70)
-      };
-    }
-    
-    // Incorrect answer - provide helpful feedback
-    const bestConstruction = relevantConstructions[0];
     return {
-      constructionId: bestConstruction.id,
-      isCorrect: false,
+      constructionId: targetConstruction?.id || 'validation-result',
+      isCorrect,
       userAnswer: {
         constructionId: 'user-answer',
         selectedIndices,
         selectedType: relationshipType,
         timestamp: Date.now()
       },
-      correctAnswer: bestConstruction,
-      feedback: {
-        message: '❌ Incorrect selection.',
-        explanation: `The correct ${this.formatConstructionType(relationshipType)} construction is: ${bestConstruction.explanation}`,
-        corrections: [`Select words at positions: ${bestConstruction.spans.map(i => question.segments[i].text).join(' + ')}`]
+      correctAnswer: targetConstruction || {
+        id: 'no-construction',
+        type: relationshipType,
+        spans: [],
+        roles: [],
+        certainty: 'inferred',
+        explanation: 'No matching construction found'
       },
-      score: 0
+      feedback: {
+        message: feedbackMessage,
+        explanation: targetConstruction?.explanation || 'Review the constructions in this verse.',
+        encouragement: isCorrect ? 'Excellent work! You identified all constructions correctly.' :
+                      isPartiallyCorrect ? 'Good progress! You correctly identified some constructions.' :
+                      'Keep practicing to improve your construction identification skills.'
+      },
+      score
     };
   }
 
@@ -776,6 +922,78 @@ export class GrammarQuizEngine {
     };
   }
 
+  /**
+   * Extract Harf Nasb + Ismuha relationships from enhanced segments
+   * Harf Nasb (حرف نصب) are accusative particles like إنّ، أنّ، لكنّ، كأنّ، ليت، لعلّ
+   * Ismuha (اسمها) is the noun that follows and is put in accusative case
+   */
+  private extractHarfNasbIsmuhaRelationships(enhancedSegments: Record<string, MorphologicalDetails>): Array<{
+    harfNasbIndex: number;
+    ismuhaIndex: number;
+    harfNasbSegment: MorphologicalDetails;
+    ismuhaSegment: MorphologicalDetails;
+  }> {
+    const relationships: Array<{
+      harfNasbIndex: number;
+      ismuhaIndex: number;
+      harfNasbSegment: MorphologicalDetails;
+      ismuhaSegment: MorphologicalDetails;
+    }> = [];
+    
+    const segments = Object.values(enhancedSegments);
+    
+    // Common Harf Nasb particles
+    const harfNasbParticles = ['إنّ', 'أنّ', 'لكنّ', 'كأنّ', 'ليت', 'لعلّ'];
+    
+    for (let i = 0; i < segments.length - 1; i++) {
+      const current = segments[i];
+      const next = segments[i + 1];
+      
+      // Check if current segment is a Harf Nasb
+      const isHarfNasb = harfNasbParticles.some(particle => 
+        current.text.includes(particle) || current.morphology?.includes('particle')
+      );
+      
+      // Check if next segment could be Ismuha (noun in accusative case)
+      const couldBeIsmuha = next.morphology?.includes('noun') || 
+                           next.grammaticalRole === 'accusative';
+      
+      if (isHarfNasb && couldBeIsmuha) {
+        relationships.push({
+          harfNasbIndex: i,
+          ismuhaIndex: i + 1,
+          harfNasbSegment: current,
+          ismuhaSegment: next
+        });
+      }
+    }
+    
+    return relationships;
+  }
+
+  /**
+   * Convert Harf Nasb + Ismuha relationship to GrammarConstruction
+   */
+  private convertHarfNasbIsmuhaToConstruction(
+    relationship: {
+      harfNasbIndex: number;
+      ismuhaIndex: number;
+      harfNasbSegment: MorphologicalDetails;
+      ismuhaSegment: MorphologicalDetails;
+    },
+    segments: MorphologicalDetails[],
+    constructionIndex: number
+  ): GrammarConstruction {
+    return {
+      id: `harf-nasb-ismuha-${constructionIndex}`,
+      type: 'harf-nasb-ismuha' as ConstructionType,
+      spans: [relationship.harfNasbIndex, relationship.ismuhaIndex],
+      roles: ['harf-nasb', 'ismuha'],
+      certainty: 'inferred',
+      explanation: `Harf Nasb "${relationship.harfNasbSegment.text}" governs the noun "${relationship.ismuhaSegment.text}" putting it in accusative case`
+    };
+  }
+
   private calculateDifficulty(
     constructions: GrammarConstruction[],
     wordCount: number
@@ -894,7 +1112,7 @@ export class GrammarQuizEngine {
   }
 
   private calculateTypeAccuracy(results: QuestionResult[], type: string): number {
-    const typeResults = results.filter(r => r.userSelection.relationshipType === type);
+    const typeResults = results.filter(r => r.userAnswer.selectedType === type);
     if (typeResults.length === 0) return 0;
     return typeResults.filter(r => r.validation.isCorrect).length / typeResults.length;
   }
@@ -929,6 +1147,250 @@ export class GrammarQuizEngine {
 
   private difference(a: number[], b: number[]): number[] {
     return a.filter(val => !b.includes(val));
+  }
+
+  /**
+   * Group constructions by type for organized feedback
+   */
+  private groupConstructionsByType(constructions: GrammarConstruction[]): Record<ConstructionType, GrammarConstruction[]> {
+    const grouped: Record<ConstructionType, GrammarConstruction[]> = {
+      'mudaf-mudaf-ilayh': [],
+      'jar-majroor': [],
+      'fil-fail': [],
+      'harf-nasb-ismuha': []
+    };
+    
+    constructions.forEach(construction => {
+      if (grouped[construction.type]) {
+        grouped[construction.type].push(construction);
+      }
+    });
+    
+    return grouped as Record<ConstructionType, GrammarConstruction[]>;
+  }
+
+  /**
+   * Format construction type name for user-friendly display
+   */
+  private getConstructionDisplayName(type: ConstructionType): string {
+    return CONSTRUCTION_CONFIG[type]?.englishName || type;
+  }
+
+  /**
+   * Check if user has correctly identified a specific construction type
+   */
+  private hasUserIdentifiedConstructionCorrectly(
+    constructions: GrammarConstruction[], 
+    userSelection: number[], 
+    userType: ConstructionType
+  ): boolean {
+    return constructions.some(construction => 
+      construction.type === userType &&
+      this.arraysEqual(construction.spans.sort(), userSelection.sort())
+    );
+  }
+
+  /**
+   * SELECTIVE DETECTION: Only detect Jar wa Majrūr relationships, ignore all others
+   * Detects both separate preposition + noun pairs AND attached prepositions within single tokens
+   */
+  private detectJarMajroorSelectively(segments: Record<string, MorphologicalDetails>): GrammarConstruction[] {
+    console.log('🎯 SELECTIVE: Detecting ONLY Jar wa Majrūr relationships');
+    const constructions: GrammarConstruction[] = [];
+    const segmentArray = Object.values(segments).sort((a, b) => {
+      const aNum = parseInt(a.id.split('-').join(''));
+      const bNum = parseInt(b.id.split('-').join(''));
+      return aNum - bNum;
+    });
+
+    // Define Arabic prepositions for detection
+    const prepositions = [
+      // Single-letter prepositions with diacritics
+      'بِ', 'لِ', 'كِ', 'تِ', 'وِ',
+      // Single-letter prepositions without diacritics
+      'ب', 'ل', 'ك', 'ت', 'و',
+      // Multi-letter prepositions
+      'مِن', 'إِلَى', 'عَن', 'فِي', 'عَلَى',
+      'من', 'إلى', 'عن', 'في', 'على',
+      'عند', 'لدى', 'حتى', 'أمام', 'خلف', 'فوق', 'تحت'
+    ];
+
+    console.log(`  📋 Will check ${segmentArray.length} segments for Jar wa Majrūr constructions`);
+
+    // Method 1: Check for separate preposition + noun pairs
+    for (let i = 0; i < segmentArray.length - 1; i++) {
+      const currentSegment = segmentArray[i];
+      const nextSegment = segmentArray[i + 1];
+      
+      console.log(`  📝 Checking separate pair ${i}-${i+1}: "${currentSegment.text}" + "${nextSegment.text}"`);
+      console.log(`     - current morphology: ${currentSegment.morphology}, grammaticalRole: ${currentSegment.grammaticalRole}`);
+      console.log(`     - next morphology: ${nextSegment.morphology}, case: ${nextSegment.case}`);
+      
+      // Check if current segment is a preposition
+      const isPrepositionByMorphology = currentSegment.morphology === 'particle' && currentSegment.grammaticalRole === 'preposition';
+      const isPrepositionByText = prepositions.includes(currentSegment.text);
+      const isPreposition = isPrepositionByMorphology || isPrepositionByText;
+      
+      console.log(`     - preposition checks: byMorphology=${isPrepositionByMorphology}, byText=${isPrepositionByText}`);
+      
+      if (isPreposition) {
+        // Check if next segment is a noun or construct that could be majroor
+        const isNoun = nextSegment.morphology === 'noun' || nextSegment.morphology?.includes('noun');
+        const isArabicNoun = nextSegment.morphology?.includes('اسم');
+        const isConstruct = nextSegment.grammaticalRole === 'construct';
+        const isGenitive = nextSegment.case === 'genitive';
+        
+        console.log(`     - noun checks: isNoun=${isNoun}, isArabicNoun=${isArabicNoun}, isConstruct=${isConstruct}, isGenitive=${isGenitive}`);
+        
+        if (isNoun || isArabicNoun || isConstruct || isGenitive) {
+          const construction: GrammarConstruction = {
+            id: `jar-majroor-separate-${i}-${Date.now()}`,
+            type: 'jar-majroor',
+            spans: [i, i + 1],
+            roles: ['jar', 'majroor'],
+            certainty: 'definite',
+            explanation: `"${currentSegment.text}" is the preposition (jar) and "${nextSegment.text}" is the genitive noun (majroor).`
+          };
+          
+          constructions.push(construction);
+          console.log(`  ✅✅ FOUND Jar wa Majrūr (separate): "${currentSegment.text}" + "${nextSegment.text}"`);
+        }
+      }
+    }
+
+    // Method 2: Check for attached prepositions within single tokens
+    for (let i = 0; i < segmentArray.length; i++) {
+      const segment = segmentArray[i];
+      const text = segment.text;
+      console.log(`  📝 Checking attached in segment ${i}: "${text}"`);
+      console.log(`     - morphology: ${segment.morphology}`);
+      console.log(`     - type: ${segment.type}`);
+      console.log(`     - case: ${segment.case}`);
+      
+      // Check if token starts with an attached preposition
+      for (const prep of prepositions) {
+        if (text.startsWith(prep) && text.length > prep.length) {
+          const remainingText = text.substring(prep.length);
+          console.log(`    ✨ "${text}" starts with "${prep}" -> remaining: "${remainingText}"`);
+          
+          // Check if the remaining part indicates it's a noun (based on morphology or context)
+          const isNoun = segment.morphology === 'noun' || segment.morphology?.includes('noun');
+          const isArabicNoun = segment.morphology?.includes('اسم');
+          const isConstruct = segment.grammaticalRole === 'construct';
+          const isGenitive = segment.case === 'genitive';
+          
+          console.log(`    📊 Noun checks: isNoun=${isNoun}, isArabicNoun=${isArabicNoun}, isConstruct=${isConstruct}, isGenitive=${isGenitive}`);
+          
+          if (isNoun || isArabicNoun || isConstruct || isGenitive) {
+            const construction: GrammarConstruction = {
+              id: `jar-majroor-attached-${i}-${Date.now()}`,
+              type: 'jar-majroor',
+              spans: [i], // Single token contains both jar and majroor
+              roles: ['jar-majroor'], // Combined role for attached preposition
+              certainty: 'definite',
+              explanation: `"${text}" contains the preposition "${prep}" attached to the noun "${remainingText}", forming a jar wa majrūr construction.`
+            };
+            
+            constructions.push(construction);
+            console.log(`  ✅✅ FOUND Jar wa Majrūr (attached): ${prep} + ${remainingText} in "${text}"`);
+            break; // Only match the first preposition found
+          } else {
+            console.log(`    ❌ Not recognized as a noun construction`);
+          }
+        }
+      }
+    }
+    
+    console.log(`  🎯 Total Jar wa Majrūr constructions found: ${constructions.length}`);
+    return constructions;
+  }
+
+  /**
+   * SELECTIVE DETECTION: Only detect Fiʿl–Fāʿil relationships, ignore all others
+   */
+  private detectFi3lFa3ilSelectively(segments: Record<string, MorphologicalDetails>): GrammarConstruction[] {
+    // ... (rest of the code remains the same)
+    const constructions: GrammarConstruction[] = [];
+    const segmentArray = Object.values(segments).sort((a, b) => {
+      const aNum = parseInt(a.id.split('-').join(''));
+      const bNum = parseInt(b.id.split('-').join(''));
+      return aNum - bNum;
+    });
+    
+    // Look for verb + subject pattern
+    for (let i = 0; i < segmentArray.length - 1; i++) {
+      const currentSegment = segmentArray[i];
+      const nextSegment = segmentArray[i + 1];
+      
+      // Check if current segment is a verb (fi'l)
+      if (currentSegment.morphology?.includes('VERB') || 
+          currentSegment.morphology?.includes('فعل')) {
+        
+        // Check if next segment is a noun that could be the subject (fa'il)
+        if (nextSegment.morphology?.includes('NOUN') || 
+            nextSegment.morphology?.includes('اسم')) {
+          
+          const construction: GrammarConstruction = {
+            id: `fil-fail-${i}-${Date.now()}`,
+            type: 'fil-fail',
+            spans: [i, i + 1],
+            roles: ['fi3l', 'fa3il'],
+            certainty: 'definite',
+            explanation: `"${currentSegment.text}" is the verb (fiʿl) and "${nextSegment.text}" is the subject (fāʿil).`
+          };
+          
+          constructions.push(construction);
+          console.log(`  ✅ Found Fiʿl–Fāʿil: ${currentSegment.text} + ${nextSegment.text}`);
+        }
+      }
+    }
+    
+    return constructions;
+  }
+
+  /**
+   * SELECTIVE DETECTION: Only detect Harf Nasb + Ismuha relationships, ignore all others
+   */
+  private detectHarfNasbIsmuhaSelectively(segments: Record<string, MorphologicalDetails>): GrammarConstruction[] {
+    console.log('🎯 SELECTIVE: Detecting ONLY Harf Nasb + Ismuha relationships');
+    const constructions: GrammarConstruction[] = [];
+    const segmentArray = Object.values(segments).sort((a, b) => {
+      const aNum = parseInt(a.id.split('-').join(''));
+      const bNum = parseInt(b.id.split('-').join(''));
+      return aNum - bNum;
+    });
+    
+    // Look for accusative particle + following noun pattern
+    const harfNasbParticles = ['أن', 'إن', 'كأن', 'لكن', 'ليت', 'لعل'];
+    
+    for (let i = 0; i < segmentArray.length - 1; i++) {
+      const currentSegment = segmentArray[i];
+      const nextSegment = segmentArray[i + 1];
+      
+      // Check if current segment is a harf nasb
+      if (harfNasbParticles.includes(currentSegment.text) ||
+          currentSegment.morphology?.includes('حرف نصب')) {
+        
+        // Check if next segment is a noun (ismuha)
+        if (nextSegment.morphology?.includes('NOUN') || 
+            nextSegment.morphology?.includes('اسم')) {
+          
+          const construction: GrammarConstruction = {
+            id: `harf-nasb-ismuha-${i}-${Date.now()}`,
+            type: 'harf-nasb-ismuha',
+            spans: [i, i + 1],
+            roles: ['harf-nasb', 'ismuha'],
+            certainty: 'definite',
+            explanation: `"${currentSegment.text}" is the accusative particle (harf nasb) and "${nextSegment.text}" is its governed noun (ismuha).`
+          };
+          
+          constructions.push(construction);
+          console.log(`  ✅ Found Harf Nasb + Ismuha: ${currentSegment.text} + ${nextSegment.text}`);
+        }
+      }
+    }
+    
+    return constructions;
   }
 }
 

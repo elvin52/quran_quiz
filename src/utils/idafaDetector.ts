@@ -215,6 +215,11 @@ export class IdafaDetector {
     segments: Record<string, MorphologicalDetails>,
     masaqEntries?: MASAQEntry[]
   ) {
+    // CRITICAL FIX: Reset state for each new detection to prevent accumulation
+    this.constructions = [];
+    this.validationNotes = [];
+    this.masaqData = {};
+    
     // Convert segments to sorted array
     this.segments = Object.values(segments).sort((a, b) => {
       const aNum = parseInt(a.id.split('-').join(''));
@@ -366,6 +371,17 @@ export class IdafaDetector {
     mudafSegment: MorphologicalDetails
   ): { isGenitive: boolean; certainty: 'definite' | 'probable' | 'inferred'; reason: string; rule: string } {
     
+    // CRITICAL FIX: True Iḍāfa requires mudāf ilay-h to be genitive WITHOUT definite article
+    // Words with definite article (ال) are adjectives (sifa), not mudāf ilay-h
+    if (segment.text.startsWith('ال') || segment.text.startsWith('الْ') || segment.text.startsWith('الَّ')) {
+      return { 
+        isGenitive: false, 
+        certainty: 'definite', 
+        reason: 'Has definite article (ال) - this is Sifa (adjective), not Iḍāfa',
+        rule: 'Definite article exclusion rule'
+      };
+    }
+
     // Direct case marking
     if (segment.case === 'genitive') {
       return { 
@@ -376,12 +392,12 @@ export class IdafaDetector {
       };
     }
 
-    // Check for genitive markers in text
+    // Check for genitive markers in text (but only if no definite article)
     if (segment.text.includes('ِ') && !segment.text.includes('ً') && !segment.text.includes('ٌ')) {
       return { 
         isGenitive: true, 
         certainty: 'definite', 
-        reason: 'Has kasra (genitive marker)',
+        reason: 'Has kasra (genitive marker) without definite article',
         rule: 'Genitive vowel marking'
       };
     }

@@ -1,0 +1,20 @@
+warning: in the working copy of 'src/App.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/components/GrammarQuiz/GrammarQuizFeedback.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/components/GrammarQuiz/QuranVerseDisplay.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/hooks/useGrammarQuizManager.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/tests/roleBasedConstructionsQA.test.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/types/quranGrammarQuiz.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/utils/grammarQuizEngine.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/utils/idafaDetector.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/utils/quranGrammarQuizEngine.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/utils/selectiveAggregationService.ts', LF will be replaced by CRLF the next time Git touches it
+src/App.tsx
+src/components/GrammarQuiz/GrammarQuizFeedback.tsx
+src/components/GrammarQuiz/QuranVerseDisplay.tsx
+src/hooks/useGrammarQuizManager.ts
+src/tests/roleBasedConstructionsQA.test.ts
+src/types/quranGrammarQuiz.ts
+src/utils/grammarQuizEngine.ts
+src/utils/idafaDetector.ts
+src/utils/quranGrammarQuizEngine.ts
+src/utils/selectiveAggregationService.ts
