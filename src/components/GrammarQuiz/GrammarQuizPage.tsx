@@ -187,50 +187,6 @@ export function GrammarQuizPage({ className }: GrammarQuizPageProps) {
                 </div>
               </div>
 
-              {/* Construction Type Overview */}
-              <div className="space-y-4">
-                <h3 className="font-semibold text-center">What You'll Practice:</h3>
-                <div className="text-center mb-6">
-                  <h4 className="text-lg font-semibold mb-2">✨ New Features ✨</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                    <div className="bg-yellow-50 dark:bg-yellow-900/20 p-3 rounded-lg">
-                      <div className="font-semibold text-yellow-800 dark:text-yellow-200">📖 Authentic Quranic Verses</div>
-                      <div className="text-yellow-700 dark:text-yellow-300">Practice with real Quranic text in natural order</div>
-                    </div>
-                    <div className="bg-teal-50 dark:bg-teal-900/20 p-3 rounded-lg">
-                      <div className="font-semibold text-teal-800 dark:text-teal-200">🖱️ Visual Word Marking</div>
-                      <div className="text-teal-700 dark:text-teal-300">Click words to highlight with colored underlines</div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="space-y-4">
-                  <div className="flex items-center justify-center gap-3 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-                    <Link2 className="h-5 w-5 text-blue-600" />
-                    <div className="text-sm">
-                      <div className="font-semibold text-blue-800 dark:text-blue-200 mb-1">
-                        Mudaf-Mudaf Ilayh (إضافة)
-                      </div>
-                      <div className="text-blue-700 dark:text-blue-300">
-                        Possessive constructions like "كتاب الطالب" (student's book)
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-center gap-3 p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
-                    <Users className="h-5 w-5 text-green-600" />
-                    <div className="text-sm">
-                      <div className="font-semibold text-green-800 dark:text-green-200 mb-1">
-                        Jar-Majroor (جر ومجرور)
-                      </div>
-                      <div className="text-green-700 dark:text-green-300">
-                        Prepositional phrases like "في البيت" (in the house)
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
               <QuizSettings onStartQuiz={handleStartQuiz} />
             </CardContent>
           </Card>

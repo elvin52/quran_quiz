@@ -65,47 +65,47 @@ export function QuizFeedback({
           <div className={`
             p-4 rounded-lg border-2 
             ${feedback.isCorrect 
-              ? 'border-green-200 bg-green-50' 
-              : 'border-red-200 bg-red-50'
+              ? 'border-green-600 bg-green-900/90 text-white' 
+              : 'border-red-600 bg-red-900/90 text-white'
             }
           `}>
-            <div className="text-sm font-medium mb-2 text-center">
+            <div className="text-sm font-medium mb-2 text-center text-gray-100">
               Your Answer
             </div>
             <div className="text-center space-y-2">
               <div 
-                className="text-2xl font-bold font-arabic"
+                className="text-2xl font-bold font-arabic text-white"
                 dir="rtl"
                 lang="ar"
               >
                 {feedback.userAnswer.arabic}
               </div>
-              <div className="text-sm">
+              <div className="text-sm text-gray-200">
                 {feedback.userAnswer.transliteration}
               </div>
-              <div className="text-xs text-muted-foreground">
+              <div className="text-xs text-gray-300">
                 {feedback.userAnswer.english}
               </div>
             </div>
           </div>
 
           {/* Correct Answer */}
-          <div className="p-4 rounded-lg border-2 border-green-200 bg-green-50">
-            <div className="text-sm font-medium mb-2 text-center">
+          <div className="p-4 rounded-lg border-2 border-green-600 bg-green-900/90 text-white">
+            <div className="text-sm font-medium mb-2 text-center text-gray-100">
               Correct Answer
             </div>
             <div className="text-center space-y-2">
               <div 
-                className="text-2xl font-bold font-arabic"
+                className="text-2xl font-bold font-arabic text-white"
                 dir="rtl"
                 lang="ar"
               >
                 {feedback.correctAnswer.arabic}
               </div>
-              <div className="text-sm">
+              <div className="text-sm text-gray-200">
                 {feedback.correctAnswer.transliteration}
               </div>
-              <div className="text-xs text-muted-foreground">
+              <div className="text-xs text-gray-300">
                 {feedback.correctAnswer.english}
               </div>
             </div>
@@ -114,29 +114,29 @@ export function QuizFeedback({
 
         {/* Grammar Information */}
         <div className="flex flex-wrap gap-2 justify-center">
-          <Badge variant="outline">
+          <Badge variant="outline" className="text-gray-100 bg-gray-800 hover:bg-gray-700 border-gray-600">
             {feedback.correctAnswer.person} person
           </Badge>
-          <Badge variant="outline">
+          <Badge variant="outline" className="text-gray-100 bg-gray-800 hover:bg-gray-700 border-gray-600">
             {feedback.correctAnswer.number}
           </Badge>
           {feedback.correctAnswer.gender && (
-            <Badge variant="outline">
+            <Badge variant="outline" className="text-gray-100 bg-gray-800 hover:bg-gray-700 border-gray-600">
               {feedback.correctAnswer.gender}
             </Badge>
           )}
-          <Badge variant="outline">
+          <Badge variant="outline" className="text-gray-100 bg-gray-800 hover:bg-gray-700 border-gray-600">
             {feedback.correctAnswer.type}
           </Badge>
         </div>
 
         {/* Explanation */}
         {showExplanation && feedback.explanation && (
-          <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
-            <h4 className="font-medium text-blue-900 mb-2">
+          <div className="p-4 bg-blue-900/90 rounded-lg border border-blue-600 text-white">
+            <h4 className="font-medium text-blue-100 mb-2">
               Explanation
             </h4>
-            <p className="text-sm text-blue-800">
+            <p className="text-sm text-blue-200">
               {feedback.explanation}
             </p>
           </div>

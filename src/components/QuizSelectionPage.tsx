@@ -110,8 +110,8 @@ export function QuizSelectionPage() {
         <Card className="mb-8 bg-[#1a1a1a] border-gray-800">
           <CardHeader className="text-center">
             <div className="flex justify-center mb-4">
-              <div className="p-4 bg-[#FFD700]/10 rounded-full">
-                <Brain className="h-12 w-12 text-[#FFD700]" />
+              <div className="p-4 bg-[#780f00]/10 rounded-full">
+                <Brain className="h-12 w-12 text-[#780f00]" />
               </div>
             </div>
             <CardTitle className="text-2xl font-bold text-white">
@@ -187,7 +187,7 @@ export function QuizSelectionPage() {
                 {/* Start Button */}
                 <Button
                   onClick={() => navigate(quiz.path)}
-                  className="w-full bg-[#FFD700] text-black hover:bg-[#FFD700]/90 font-medium"
+                  className="w-full bg-[#780f00] text-white hover:bg-[#780f00]/90 font-medium"
                   size="lg"
                 >
                   <BookOpen className="h-4 w-4 mr-2" />

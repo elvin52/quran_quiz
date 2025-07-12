@@ -40,14 +40,16 @@ export function GrammarQuizFeedback({
   };
 
   const getScoreColor = (score: number): string => {
-    if (score >= 0.8) return 'text-green-600 dark:text-green-400';
-    if (score >= 0.5) return 'text-yellow-600 dark:text-yellow-400';
+    if (isNaN(score) || score === undefined) return 'text-green-600 dark:text-green-400';
+    if (score >= 80) return 'text-green-600 dark:text-green-400';
+    if (score >= 50) return 'text-yellow-600 dark:text-yellow-400';
     return 'text-red-600 dark:text-red-400';
   };
 
   const getScoreBgColor = (score: number): string => {
-    if (score >= 0.8) return 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-700';
-    if (score >= 0.5) return 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-700';
+    if (isNaN(score) || score === undefined) return 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-700';
+    if (score >= 80) return 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-700';
+    if (score >= 50) return 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-700';
     return 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-700';
   };
 
@@ -78,31 +80,40 @@ export function GrammarQuizFeedback({
         <div className="flex items-center justify-between">
           <CardTitle className="flex items-center gap-3">
             {renderFeedbackIcon()}
-            <span className={getScoreColor(validation.partialCredit)}>
+            <span className={validation.isCorrect ? 'text-green-600 dark:text-green-400' : getScoreColor(validation.score)}>
               {validation.feedback.message}
             </span>
           </CardTitle>
           <div className="flex items-center gap-2">
             {getPerformanceBadge()}
-            <Badge variant="outline">
-              {formatResponseTime(responseTime)}
-            </Badge>
+            {/* Removed time display */}
           </div>
         </div>
       </CardHeader>
 
       <CardContent className="space-y-4">
         {/* Score Display */}
-        <div className={cn('p-4 rounded-lg border', getScoreBgColor(validation.partialCredit))}>
+        <div className={cn('p-4 rounded-lg border', validation.isCorrect ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-700' : getScoreBgColor(validation.score))}>
           <div className="flex items-center justify-between">
             <span className="font-medium">Score</span>
-            <span className={cn('text-xl font-bold', getScoreColor(validation.partialCredit))}>
-              {Math.round(validation.partialCredit * 100)}%
+            <span className={cn('text-xl font-bold', validation.isCorrect ? 'text-green-600 dark:text-green-400' : getScoreColor(validation.score))}>
+              {(() => {
+                // Extract percentage from feedback message if available
+                if (validation.feedback?.message) {
+                  const percentageMatch = validation.feedback.message.match(/\((\d+)%\)/);
+                  if (percentageMatch && percentageMatch[1]) {
+                    return `${percentageMatch[1]}%`;
+                  }
+                }
+                // Fallback to the validation.score or default values
+                return validation.isCorrect ? '100%' : (isNaN(validation.score) ? '0%' : `${Math.round(validation.score)}%`);
+              })()}
             </span>
           </div>
-          {validation.partialCredit > 0 && validation.partialCredit < 1 && (
+          {/* Show the construction ratio from the feedback message */}
+          {validation.feedback?.message && validation.feedback.message.includes('Score:') && (
             <p className="text-sm text-muted-foreground mt-2">
-              Partial credit awarded for identifying part of the construction
+              {validation.feedback.message.split('Score:')[1].split('-')[0].trim()}
             </p>
           )}
         </div>

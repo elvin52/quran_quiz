@@ -82,6 +82,9 @@ export class QuizEngine {
     // Generate the conjugated verb form
     const conjugatedVerb = this.conjugateVerb(verb, correctPronoun);
     
+    // Generate correct transliteration to match the conjugated verb
+    const correctTransliteration = this.generateTransliteration(verb.transliteration, correctPronoun);
+    
     // Generate wrong options
     const wrongOptions = this.generateWrongPronounOptions(correctPronoun, 3);
     const allOptions = this.shuffleArray([correctPronoun, ...wrongOptions]);
@@ -91,7 +94,8 @@ export class QuizEngine {
       type: 'select_pronoun',
       verb: {
         ...verb,
-        presentTense: conjugatedVerb
+        presentTense: conjugatedVerb,
+        transliteration: correctTransliteration
       },
       correctAnswer: correctPronoun,
       options: allOptions,
@@ -108,33 +112,87 @@ export class QuizEngine {
     verb: ArabicVerb, 
     difficulty: QuizSettings['difficulty']
   ): QuizQuestion {
-    // Select a random attached pronoun
-    const attachedPronoun = this.getRandomPronoun(ATTACHED_PRONOUNS);
+    // Select a random pronoun
+    const correctPronoun = this.getRandomPronoun(ATTACHED_PRONOUNS);
     
-    // Create verb with attached pronoun
-    const verbWithPronoun = verb.presentTense + attachedPronoun.arabic;
+    // Generate the conjugated verb form with attached pronoun
+    const conjugatedVerb = this.attachPronoun(verb, correctPronoun);
     
-    // Generate wrong options from attached pronouns
-    const wrongOptions = ATTACHED_PRONOUNS
-      .filter(p => p.id !== attachedPronoun.id)
-      .sort(() => Math.random() - 0.5)
-      .slice(0, 3);
+    // Generate correct transliteration to match
+    const baseTransliteration = this.generateTransliteration(verb.transliteration, {
+      id: 'huwa',
+      arabic: 'هُوَ',
+      transliteration: 'huwa',
+      english: 'he',
+      type: 'independent',
+      person: 'third',
+      number: 'singular',
+      gender: 'masculine'
+    });
     
-    const allOptions = this.shuffleArray([attachedPronoun, ...wrongOptions]);
+    const combinedTransliteration = `${baseTransliteration}-${correctPronoun.transliteration}`;
+    
+    // Generate wrong options
+    const wrongOptions = this.generateWrongPronounOptions(correctPronoun, 3, ATTACHED_PRONOUNS);
+    const allOptions = this.shuffleArray([correctPronoun, ...wrongOptions]);
     
     return {
       id: this.generateQuestionId(),
       type: 'identify_attached',
       verb: {
         ...verb,
-        presentTense: verbWithPronoun
+        presentTense: conjugatedVerb,
+        transliteration: combinedTransliteration
       },
-      correctAnswer: attachedPronoun,
+      correctAnswer: correctPronoun,
       options: allOptions,
       difficulty: verb.difficulty as any,
-      questionText: `What is the attached pronoun in "${verbWithPronoun}"?`,
-      explanation: `The attached pronoun "${attachedPronoun.arabic}" means "${attachedPronoun.english}".`
+      questionText: `Which pronoun is attached to "${conjugatedVerb}" (${verb.meaning})?`,
+      explanation: `The verb has the attached pronoun "${correctPronoun.arabic}" (${correctPronoun.english}).`
     };
+  }
+
+  /**
+   * Generate transliteration for a conjugated verb
+   */
+  private static generateTransliteration(baseTransliteration: string, pronoun: ArabicPronoun): string {
+    // Base transliteration is always in 3rd person masculine form (yaf'alu)
+    switch(pronoun.id) {
+      // First person
+      case 'ana':
+        return baseTransliteration.replace(/^ya/, 'a'); // yajidu → ajidu
+      case 'nahnu':
+        return baseTransliteration.replace(/^ya/, 'na'); // yajidu → najidu
+        
+      // Second person
+      case 'anta':
+        return baseTransliteration.replace(/^ya/, 'ta'); // yajidu → tajidu
+      case 'anti':
+        return baseTransliteration.replace(/^ya/, 'ta'); // yajidu → tajidu + suffix
+      case 'antuma':
+        return baseTransliteration.replace(/^ya/, 'ta') + 'ni'; // tajiduni
+      case 'antum':
+        return baseTransliteration.replace(/^ya/, 'ta') + 'na'; // tajiduna
+      case 'antunna':
+        return baseTransliteration.replace(/^ya/, 'ta') + 'na'; // tajidna
+        
+      // Third person (base form for masculine singular)
+      case 'huwa':
+        return baseTransliteration; // yajidu (unchanged)
+      case 'hiya':
+        return baseTransliteration.replace(/^ya/, 'ta'); // yajidu → tajidu
+      case 'huma_m':
+      case 'huma_f':
+        // For dual forms, change ending: yajidu → yajidāni
+        return baseTransliteration.slice(0, -1) + 'āni';
+      case 'hum':
+        return baseTransliteration.slice(0, -1) + 'ūna'; // yajidu → yajidūna
+      case 'hunna':
+        return baseTransliteration.slice(0, -1) + 'na'; // yajidu → yajidna
+        
+      default:
+        return baseTransliteration;
+    }
   }
 
   /**
@@ -164,9 +222,11 @@ export class QuizEngine {
       case 'hiya':
         return baseForm.replace('يَ', 'تَ'); // She does
       case 'huma_m':
-        return baseForm + 'انِ'; // They (m.dual) do
+        // For dual, replace the final damma with a fatha + alif before adding نِ
+        return baseForm.slice(0, -1) + 'َانِ'; // They (m.dual) do - e.g., يَنْظُرُ → يَنْظُرَانِ
       case 'huma_f':
-        return baseForm + 'انِ'; // They (f.dual) do
+        // Same conjugation for feminine dual
+        return baseForm.slice(0, -1) + 'َانِ'; // They (f.dual) do - e.g., يَنْظُرُ → يَنْظُرَانِ
       case 'hum':
         return baseForm + 'ونَ'; // They (m) do
       case 'hunna':
@@ -176,6 +236,16 @@ export class QuizEngine {
         console.warn(`Unhandled pronoun conjugation for: ${pronoun.id}`);
         return baseForm;
     }
+  }
+
+  /**
+   * Attach a pronoun to a verb
+   */
+  private static attachPronoun(verb: ArabicVerb, pronoun: ArabicPronoun): string {
+    // For simplicity, we'll just append the pronoun to the verb
+    // In a more advanced version, this would handle the correct grammar rules
+    // for attaching pronouns to verbs based on case, gender, etc.
+    return verb.presentTense + pronoun.arabic;
   }
 
   /**
@@ -265,8 +335,8 @@ export class QuizEngine {
     return pronouns[Math.floor(Math.random() * pronouns.length)];
   }
 
-  private static generateWrongPronounOptions(correct: ArabicPronoun, count: number): ArabicPronoun[] {
-    const availableOptions = INDEPENDENT_PRONOUNS.filter(p => p.id !== correct.id);
+  private static generateWrongPronounOptions(correct: ArabicPronoun, count: number, pronouns: ArabicPronoun[] = INDEPENDENT_PRONOUNS): ArabicPronoun[] {
+    const availableOptions = pronouns.filter(p => p.id !== correct.id);
     return availableOptions.sort(() => Math.random() - 0.5).slice(0, count);
   }
 
