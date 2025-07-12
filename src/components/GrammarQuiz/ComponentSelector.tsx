@@ -31,6 +31,9 @@ interface ComponentSelectorProps {
   selectedWordCount: number;
   className?: string;
   disabled?: boolean;
+  // Auto-assignment functionality
+  autoAssign?: boolean;
+  onAutoAssign?: (role: ComponentRole) => void;
 }
 
 // Role color mapping for visual consistency
@@ -118,11 +121,21 @@ export function ComponentSelector({
   onRoleSelect,
   selectedWordCount,
   className,
-  disabled = false
+  disabled = false,
+  autoAssign = false,
+  onAutoAssign
 }: ComponentSelectorProps) {
 
   const handleRoleClick = (role: ComponentRole) => {
     if (disabled) return;
+    
+    // Auto-assign mode: immediately assign role to selected words
+    if (autoAssign && selectedWordCount > 0 && onAutoAssign) {
+      onAutoAssign(role);
+      return;
+    }
+    
+    // Traditional mode: just select the role
     onRoleSelect(role);
   };
 
@@ -164,7 +177,8 @@ export function ComponentSelector({
                       'text-sm font-medium transition-all duration-200',
                       colors.button,
                       isSelected && `${colors.bg} ${colors.border} ${colors.text}`,
-                      disabled && 'opacity-50 cursor-not-allowed'
+                      disabled && 'opacity-50 cursor-not-allowed',
+                      autoAssign && selectedWordCount > 0 && 'ring-2 ring-blue-300 hover:ring-blue-400'
                     )}
                     data-state={isSelected ? 'active' : 'inactive'}
                   >
@@ -183,13 +197,19 @@ export function ComponentSelector({
           </div>
         )}
         
-        {selectedWordCount > 0 && !selectedRole && (
+        {!autoAssign && selectedWordCount > 0 && !selectedRole && (
           <div className="text-center text-sm text-amber-600">
             Choose a role for the selected word{selectedWordCount !== 1 ? 's' : ''}
           </div>
         )}
         
-        {selectedRole && selectedWordCount > 0 && (
+        {autoAssign && selectedWordCount > 0 && (
+          <div className="text-center text-sm text-blue-600 font-medium">
+            Click any role button to instantly assign to {selectedWordCount} selected word{selectedWordCount !== 1 ? 's' : ''}
+          </div>
+        )}
+        
+        {!autoAssign && selectedRole && selectedWordCount > 0 && (
           <div className="text-center">
             <Badge 
               className={cn(

@@ -43,6 +43,7 @@ export interface ComponentConstruction {
   id: string;
   type: ConstructionType;
   components: ComponentSelection[];  // All components in this construction
+  wordIndices: number[];            // All word indices involved in this construction
   isComplete: boolean;              // Whether all required components are selected
 }
 

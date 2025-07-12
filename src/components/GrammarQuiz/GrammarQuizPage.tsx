@@ -5,7 +5,7 @@
  * Follows the same patterns as PronounQuizPage.tsx for consistency.
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
@@ -67,6 +67,68 @@ export function GrammarQuizPage({ className }: GrammarQuizPageProps) {
   
   // Toggle between construction and component selection modes
   const [selectionMode, setSelectionMode] = useState<'construction' | 'component'>('construction');
+  
+  // Track submitted construction IDs to avoid duplicates
+  const [submittedConstructionIds, setSubmittedConstructionIds] = useState<string[]>([]);
+  
+  // Auto-submission logic for completed constructions in Component Mode
+  useEffect(() => {
+    if (selectionMode === 'component' && !quizState.isLoading) {
+      const completedConstructions = componentSelection.getCompletedConstructions();
+      
+      if (completedConstructions.length > 0) {
+        console.log('🔄 Auto-submission checking completed constructions:', completedConstructions);
+        
+        // Filter out already submitted constructions
+        const newConstructions = completedConstructions.filter(
+          construction => !submittedConstructionIds.includes(construction.id)
+        );
+        
+        if (newConstructions.length > 0) {
+          console.log('✨ Found new completed constructions to auto-submit:', newConstructions);
+          
+          // Auto-submit each new completed construction
+          newConstructions.forEach(construction => {
+            submitComponentConstruction(construction);
+          });
+        }
+      }
+    }
+  }, [componentSelection.state.constructions, selectionMode, quizState.isLoading]);
+  
+  // Helper function to submit a component construction
+  const submitComponentConstruction = useCallback((construction) => {
+    console.log('🚀 Auto-submitting construction:', construction);
+    
+    // Only submit supported construction types
+    if (construction.type === 'mudaf-mudaf-ilayh' || construction.type === 'jar-majroor') {
+      const wordIndices = construction.components.map(comp => comp.wordIndex).sort((a, b) => a - b);
+      
+      // Add this construction ID to the submitted list
+      setSubmittedConstructionIds(prev => [...prev, construction.id]);
+      
+      // Temporarily set the construction type in the quiz manager
+      selectConstructionType(construction.type);
+      
+      // Clear current selection and set the word indices from the component construction
+      selectedIndices.forEach(index => toggleWordSelection(index));
+      wordIndices.forEach(index => {
+        if (!selectedIndices.includes(index)) {
+          toggleWordSelection(index);
+        }
+      });
+      
+      // Submit using the traditional method
+      submitCurrentConstruction();
+      
+      console.log('✅ Construction auto-submitted successfully:', {
+        type: construction.type,
+        wordIndices
+      });
+    } else {
+      console.log('⚠️ Skipping unsupported construction type:', construction.type);
+    }
+  }, [selectConstructionType, toggleWordSelection, selectedIndices, submitCurrentConstruction]);
 
   const progress = quizState.progress;
   const questionNumber = currentSession ? currentSession.questions.length + 1 : 0;
@@ -295,6 +357,30 @@ export function GrammarQuizPage({ className }: GrammarQuizPageProps) {
                 onRoleSelect={componentSelection.selectRole}
                 selectedWordCount={componentSelection.state.selectedWordIndices.length}
                 disabled={quizState.isLoading}
+                autoAssign={true}
+                onAutoAssign={(role) => {
+                  console.log('🎯 AUTO-ASSIGN TRIGGERED:', {
+                    role,
+                    selectedWordIndices: componentSelection.state.selectedWordIndices,
+                    currentRole: componentSelection.state.currentRole,
+                    assignedComponents: componentSelection.state.assignedComponents
+                  });
+                  
+                  // Use our new atomic operation that combines role selection and assignment
+                  // This fixes the early return bug by ensuring role is available during assignment
+                  componentSelection.selectAndAssignRole(role);
+                  
+                  console.log('✅ After atomic role assignment:', {
+                    assignedComponents: componentSelection.state.assignedComponents,
+                    constructions: componentSelection.state.constructions
+                  });
+                  console.log('✅ Fixed auto-assignment with selectAndAssignRole:', {
+                    assignedComponents: componentSelection.state.assignedComponents,
+                    constructions: componentSelection.state.constructions,
+                    selectedWordIndices: componentSelection.state.selectedWordIndices
+                  });
+                  // Note: assignRoleToSelectedWords() already clears word selection and role
+                }}
               />
             )}
 
@@ -305,6 +391,32 @@ export function GrammarQuizPage({ className }: GrammarQuizPageProps) {
                 onTypeSelect={selectConstructionType}
                 disabled={quizState.isLoading}
               />
+            )}
+
+            {/* Component Mode: Ready to Submit Summary */}
+            {selectionMode === 'component' && componentSelection.getCompletedConstructions().length > 0 && (
+              <Card className="border-green-200 bg-green-50">
+                <CardHeader>
+                  <CardTitle className="text-lg text-green-800">Ready to Submit</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2">
+                    {componentSelection.getCompletedConstructions().map((construction, index) => (
+                      <div key={construction.id} className="flex items-center justify-between p-2 bg-white rounded border border-green-200">
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline" className="border-green-500 text-green-700 bg-green-100">
+                            {construction.type === 'mudaf-mudaf-ilayh' ? 'إضافة' : 'جار ومجرور'}
+                          </Badge>
+                          <span className="text-sm font-mono text-green-800">
+                            Words: {construction.components.map(comp => comp.wordIndex).sort((a, b) => a - b).join(', ')}
+                          </span>
+                        </div>
+                        <CheckCircle className="h-4 w-4 text-green-600" />
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
             )}
 
             {/* Submitted Constructions Summary */}
@@ -337,8 +449,8 @@ export function GrammarQuizPage({ className }: GrammarQuizPageProps) {
               </Card>
             )}
 
-            {/* Component Mode Actions */}
-            {selectionMode === 'component' && componentSelection.state.selectedWordIndices.length > 0 && componentSelection.state.currentRole && (
+            {/* Component Mode Actions - Only shown if auto-assign is disabled */}
+            {false && selectionMode === 'component' && componentSelection.state.selectedWordIndices.length > 0 && componentSelection.state.currentRole && (
               <div className="flex justify-center">
                 <Button
                   onClick={() => {
@@ -371,8 +483,51 @@ export function GrammarQuizPage({ className }: GrammarQuizPageProps) {
                 </Button>
                 
                 <Button
-                  onClick={submitCurrentConstruction}
-                  disabled={!canSubmitConstruction || quizState.isLoading}
+                  onClick={() => {
+                    if (selectionMode === 'construction') {
+                      // Traditional mode
+                      submitCurrentConstruction();
+                    } else {
+                      // Component mode - submit completed constructions one by one
+                      const completedConstructions = componentSelection.getCompletedConstructions();
+                      completedConstructions.forEach(construction => {
+                        const wordIndices = construction.components.map(comp => comp.wordIndex).sort((a, b) => a - b);
+                        
+                        // Only submit supported construction types
+                        if (construction.type === 'mudaf-mudaf-ilayh' || construction.type === 'jar-majroor') {
+                          // Temporarily set the construction type and indices in the quiz manager
+                          selectConstructionType(construction.type);
+                          
+                          // Clear current selection and set the word indices from the component construction
+                          selectedIndices.forEach(index => toggleWordSelection(index));
+                          wordIndices.forEach(index => {
+                            if (!selectedIndices.includes(index)) {
+                              toggleWordSelection(index);
+                            }
+                          });
+                          
+                          // Submit using the traditional method after a brief delay to ensure state updates
+                          setTimeout(() => {
+                            submitCurrentConstruction();
+                          }, 50);
+                        }
+                      });
+                      
+                      // Reset component selection after submission
+                      setTimeout(() => {
+                        componentSelection.reset();
+                      }, 100);
+                    }
+                  }}
+                  disabled={
+                    quizState.isLoading || 
+                    (selectionMode === 'construction' && !canSubmitConstruction) ||
+                    (selectionMode === 'component' && 
+                      // Enable button if there are completed constructions OR if enough components are selected
+                      componentSelection.getCompletedConstructions().length === 0 && 
+                      // Check if we have enough assigned components to form a construction (at least 2)
+                      componentSelection.state.assignedComponents.length < 2)
+                  }
                   size="lg"
                   className="min-w-48"
                 >
@@ -419,8 +574,8 @@ export function GrammarQuizPage({ className }: GrammarQuizPageProps) {
             <QuranVerseDisplay
               segments={quizState.currentQuestion!.segments}
               selectedIndices={selectedIndices}
-              correctIndices={currentValidation.highlightCorrect}
-              incorrectIndices={currentValidation.highlightIncorrect}
+              correctIndices={[]}
+              incorrectIndices={[]}
               onWordClick={() => {}} // Disabled during feedback
               showFeedback={true}
               disabled={true}

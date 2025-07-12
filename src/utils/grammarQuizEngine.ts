@@ -392,10 +392,10 @@ export class GrammarQuizEngine {
     console.log(`💡 User selection type: ${userSelection.relationshipType}`); 
     console.log(`💡 Total correctAnswers in question: ${question.correctAnswers.length}`);
     
-    // Log all constructions in the question to debug the "8 constructions" issue
+    // Log all constructions in the question
     console.log(`📊 ALL CONSTRUCTIONS IN QUESTION:`);
     question.correctAnswers.forEach((c, i) => {
-      console.log(`  ${i+1}. ${c.type} ${SUPPORTED_CONSTRUCTION_TYPES.includes(c.type) ? '✅' : '❌'}`); 
+      console.log(`  ${i+1}. ${c.type} ${SUPPORTED_CONSTRUCTION_TYPES.includes(c.type) ? '✅' : '❌'} - spans: [${c.spans.join(', ')}]`); 
     });
     
     const { selectedIndices, relationshipType, roleBasedSelection } = userSelection;
@@ -406,15 +406,14 @@ export class GrammarQuizEngine {
       return this.validateRoleBasedAnswer(question, userSelection);
     }
     
-    // STRICT FILTERING: Only include our 4 supported construction types
-    // This is the core fix to prevent "Found 1/8 constructions" problem
+    // Filter to only include our supported construction types
     const allConstructions = question.correctAnswers.filter(c => 
       SUPPORTED_CONSTRUCTION_TYPES.includes(c.type)
     );
     
     console.log(`✅ FILTERED: ${allConstructions.length}/${question.correctAnswers.length} supported constructions`);
     allConstructions.forEach((c, i) => {
-      console.log(`  ${i+1}. ${c.type}: ${CONSTRUCTION_CONFIG[c.type].englishName}`); 
+      console.log(`  ${i+1}. ${c.type}: ${CONSTRUCTION_CONFIG[c.type].englishName} - spans: [${c.spans.join(', ')}]`); 
     });
     
     // Group constructions by type for detailed feedback
@@ -432,6 +431,9 @@ export class GrammarQuizEngine {
     let totalConstructions = 0;
     let correctlyIdentified = 0;
     
+    // Debug info for user selection
+    console.log(`🔍 USER SELECTION: type=${relationshipType}, indices=[${selectedIndices.join(', ')}]`);
+    
     // Check each supported construction type that's actually present in the verse
     SUPPORTED_CONSTRUCTION_TYPES.forEach(type => {
       const constructionsOfType = constructionsByType[type] || [];
@@ -445,14 +447,70 @@ export class GrammarQuizEngine {
         let correct = false;
         
         if (userIdentified) {
-          // Check if user's selection matches any construction of this type
-          correct = constructionsOfType.some(construction => 
-            this.arraysEqual(construction.spans.sort(), selectedIndices.sort())
-          );
+          // IMPROVED VALIDATION LOGIC FOR ALL CONSTRUCTION TYPES
+          console.log(`🔍 VALIDATING: ${type} construction`);
           
-          if (correct) {
-            correctlyIdentified++;
-          }
+          correct = constructionsOfType.some(construction => {
+            // Debug info for each potential match
+            const constructionSpans = construction.spans || [];
+            console.log(`  Comparing user selection [${selectedIndices.join(', ')}] with correct spans [${constructionSpans.join(', ')}]`);
+            
+            // Standard exact match first (for all construction types)
+            const exactMatch = this.arraysEqual(constructionSpans.sort(), selectedIndices.sort());
+            
+            if (exactMatch) {
+              console.log(`  ✅ Found exact match for ${type} construction`);
+              return true;
+            }
+            
+            // For handling index mismatches and partial matches across all construction types
+            // This helps with aggregation quirks and index mapping issues
+            const userSelectedSet = new Set(selectedIndices);
+            const correctSpanSet = new Set(constructionSpans);
+            
+            // Check if there's any overlap between selections 
+            // This is useful for cases where the indices don't align perfectly
+            const hasOverlap = selectedIndices.some(idx => correctSpanSet.has(idx)) || 
+                             constructionSpans.some(idx => userSelectedSet.has(idx));
+                          
+            // Check if the sets are similar in size (allowing for small differences)
+            const similarSize = Math.abs(selectedIndices.length - constructionSpans.length) <= 1;
+            
+            // For Iḍāfa specifically, check for mudaf and mudaf-ilayh components
+            if (type === 'mudaf-mudaf-ilayh') {
+              // Special case for Iḍāfa with definite article on mudaf-ilayh
+              // Example: "رَبِّ ٱلعَٰلَمِينَ" - the definite article might cause index mismatches
+              
+              // If user selection overlaps with correct spans and sizes are similar
+              if (hasOverlap && similarSize) {
+                console.log(`  ✅ Found valid Iḍāfa match with overlapping indices`);
+                return true;
+              }
+            }
+            
+            // For jar-majroor, we need more flexible matching due to attached forms
+            if (type === 'jar-majroor') {
+              // Check for subset/partial matches that might occur with attached prepositions
+              const userSelectedSubset = selectedIndices.every(idx => correctSpanSet.has(idx));
+              const correctSpansSubset = construction.spans.every(idx => userSelectedSet.has(idx));
+              
+              // Allow partial matches for jar-majroor to handle attached prepositions
+              const isPartialMatch = userSelectedSubset || correctSpansSubset || 
+                                   (hasOverlap && similarSize);
+              
+              if (isPartialMatch) {
+                console.log(`  ✅ Found valid jar-majroor match with partial/overlapping indices`);
+                return true;
+              }
+            }
+            
+            console.log(`  ❌ No match found for this construction`);
+            return false;
+          });
+        }
+        
+        if (correct) {
+          correctlyIdentified++;
         }
         
         constructionFeedback.push({
@@ -1150,23 +1208,36 @@ export class GrammarQuizEngine {
   }
 
   /**
-   * Group constructions by type for organized feedback
+   * Group construction objects by their type
    */
   private groupConstructionsByType(constructions: GrammarConstruction[]): Record<ConstructionType, GrammarConstruction[]> {
-    const grouped: Record<ConstructionType, GrammarConstruction[]> = {
-      'mudaf-mudaf-ilayh': [],
-      'jar-majroor': [],
-      'fil-fail': [],
-      'harf-nasb-ismuha': []
-    };
+    const result: Partial<Record<ConstructionType, GrammarConstruction[]>> = {};
+    
+    // Initialize all supported construction types with empty arrays
+    SUPPORTED_CONSTRUCTION_TYPES.forEach(type => {
+      result[type] = [];
+    });
     
     constructions.forEach(construction => {
-      if (grouped[construction.type]) {
-        grouped[construction.type].push(construction);
+      const { type } = construction;
+      // Only add supported construction types
+      if (SUPPORTED_CONSTRUCTION_TYPES.includes(type) && result[type]) {
+        result[type]!.push(construction);
+        console.log(`🔢 Added construction to group ${type}:`, {
+          indices: construction.spans || [],
+          id: construction.id
+        });
       }
     });
     
-    return grouped as Record<ConstructionType, GrammarConstruction[]>;
+    // Log the distribution of constructions by type
+    console.log('📊 CONSTRUCTION DISTRIBUTION:');
+    SUPPORTED_CONSTRUCTION_TYPES.forEach(type => {
+      const count = (result[type] || []).length;
+      console.log(`  ${type}: ${count} construction(s)`);
+    });
+    
+    return result as Record<ConstructionType, GrammarConstruction[]>;
   }
 
   /**
