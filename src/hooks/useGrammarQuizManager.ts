@@ -234,10 +234,29 @@ export function useGrammarQuizManager() {
 
   // Finalize all constructions for the question and move to feedback
   const finalizeQuestion = useCallback(() => {
-    if (!state.currentSession || !state.quizState.currentQuestion) return;
+    // DEBUG: Log quizState and segments
+    console.log('DEBUG finalizeQuestion - Starting with segments:', {
+      segmentsType: state.quizState.currentQuestion?.segments ? 
+        (Array.isArray(state.quizState.currentQuestion.segments) ? 'array' : 'object') : 'undefined',
+      segments: state.quizState.currentQuestion?.segments,
+      currentQuestion: state.quizState.currentQuestion
+    });
+
+    if (!state.currentSession || !state.quizState.currentQuestion) {
+      console.log('DEBUG finalizeQuestion - Early return, missing session or question');
+      return;
+    }
 
     // Import the supported construction types
     const SUPPORTED_CONSTRUCTION_TYPES = ['mudaf-mudaf-ilayh', 'jar-majroor', 'fil-fail', 'harf-nasb-ismuha'];
+    
+    // DEBUG: Log before filter operation
+    console.log('DEBUG finalizeQuestion - Before filter operation:', {
+      correctAnswersExists: !!state.quizState.currentQuestion.correctAnswers,
+      correctAnswersType: typeof state.quizState.currentQuestion.correctAnswers,
+      correctAnswersIsArray: Array.isArray(state.quizState.currentQuestion.correctAnswers),
+      correctAnswersLength: state.quizState.currentQuestion.correctAnswers?.length
+    });
     
     // Only count supported constructions, not all constructions
     const supportedConstructions = state.quizState.currentQuestion.correctAnswers.filter(c => 
