@@ -173,6 +173,17 @@ export function useGrammarQuizManager() {
       };
     });
   }, [state.quizState.isAnswered, state.quizState.showFeedback]);
+  
+  // Direct Word Selection (set all indices at once)
+  const setWordIndices = useCallback((indices: number[]) => {
+    if (state.quizState.isAnswered || state.quizState.showFeedback) return;
+    
+    console.log('DEBUG: Setting word indices directly:', indices);
+    setState(prev => ({
+      ...prev,
+      selectedIndices: [...indices]
+    }));
+  }, [state.quizState.isAnswered, state.quizState.showFeedback]);
 
   // Construction Type Selection
   const selectConstructionType = useCallback((type: 'mudaf-mudaf-ilayh' | 'jar-majroor') => {
@@ -186,10 +197,20 @@ export function useGrammarQuizManager() {
 
   // Submit current construction and continue selecting
   const submitCurrentConstruction = useCallback(() => {
+    // DEBUG: Log the current state before attempting to submit
+    console.log('DEBUG submitCurrentConstruction - Starting submission attempt with:', {
+      hasSession: !!state.currentSession,
+      hasQuestion: !!state.quizState.currentQuestion,
+      selectedIndices: state.selectedIndices ? [...state.selectedIndices] : [],
+      selectedIndicesLength: state.selectedIndices?.length || 0,
+      selectedConstructionType: state.selectedConstructionType || 'none'
+    });
+    
     if (!state.currentSession || 
         !state.quizState.currentQuestion || 
         state.selectedIndices.length === 0 || 
         !state.selectedConstructionType) {
+      console.log('DEBUG submitCurrentConstruction - Early return due to missing requirements');
       return;
     }
 
@@ -203,6 +224,13 @@ export function useGrammarQuizManager() {
       selectionTimeMs: responseTime
     };
 
+    // DEBUG: Log before validation
+    console.log('DEBUG submitCurrentConstruction - About to validate answer:', {
+      selectedIndices: [...userSelection.selectedIndices],
+      relationshipType: userSelection.relationshipType,
+      questionType: state.quizState.currentQuestion?.type
+    });
+
     const validation = grammarQuizEngine.validateAnswer(
       state.quizState.currentQuestion,
       userSelection
@@ -214,6 +242,15 @@ export function useGrammarQuizManager() {
       constructionType: state.selectedConstructionType,
       validation
     };
+
+    // DEBUG: Log before updating state
+    console.log('DEBUG submitCurrentConstruction - Adding new construction:', {
+      constructionId: newConstruction.id,
+      indices: [...newConstruction.indices],
+      constructionType: newConstruction.constructionType,
+      isCorrect: validation.isCorrect,
+      existingConstructions: state.submittedConstructions.length
+    });
 
     setState(prev => ({
       ...prev,
@@ -412,31 +449,26 @@ export function useGrammarQuizManager() {
   // Check if session is completed
   const isSessionCompleted = state.currentSession?.endTime !== undefined;
 
+  // Return hook object with all functions
   return {
-    // State
     quizState: state.quizState,
     currentSession: state.currentSession,
     selectedIndices: state.selectedIndices,
     selectedConstructionType: state.selectedConstructionType,
     submittedConstructions: state.submittedConstructions,
-    currentValidation: currentValidation.current,
+    currentValidation: state.currentValidation,
     canSubmitConstruction,
     canFinalizeQuestion,
-    isSessionCompleted,
-
-    // Actions
+    isSessionCompleted: !!state.sessionStats,
     startSession,
-    toggleWordSelection,
-    selectConstructionType,
-    submitCurrentConstruction,
-    finalizeQuestion,
     nextQuestion,
     resetQuiz,
+    selectConstructionType,
+    toggleWordSelection,
+    setWordIndices,
+    submitCurrentConstruction,
+    finalizeQuestion,
     getCurrentStatistics,
-
-    // Helpers
-    getCurrentQuestionNumber: () => state.currentSession ? state.currentSession.questions.length + 1 : 0,
-    getProgress: () => state.quizState.progress,
     getAllSelectedIndices: () => [
       ...state.selectedIndices,
       ...state.submittedConstructions.flatMap(c => c.indices)

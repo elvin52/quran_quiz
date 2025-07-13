@@ -51,6 +51,7 @@ export function GrammarQuizPage({ className }: GrammarQuizPageProps) {
     isSessionCompleted,
     startSession,
     toggleWordSelection,
+    setWordIndices,
     selectConstructionType,
     submitCurrentConstruction,
     finalizeQuestion,
@@ -445,37 +446,60 @@ export function GrammarQuizPage({ className }: GrammarQuizPageProps) {
                 
                 <Button
                   onClick={() => {
+                    console.log('DEBUG: Add Construction button clicked', {
+                      selectionMode,
+                      hasWordSelection: selectedIndices.length > 0,
+                      selectedConstructionType,
+                      completedConstructionsCount: selectionMode === 'component' ? 
+                        componentSelection.getCompletedConstructions().length : 0
+                    });
+                    
                     if (selectionMode === 'construction') {
                       // Traditional mode
+                      console.log('DEBUG: Traditional mode - calling submitCurrentConstruction()');
                       submitCurrentConstruction();
                     } else {
                       // Component mode - submit completed constructions one by one
                       const completedConstructions = componentSelection.getCompletedConstructions();
+                      console.log('DEBUG: Component mode - found completedConstructions count:', 
+                        completedConstructions.length);
+                      
                       completedConstructions.forEach(construction => {
                         const wordIndices = construction.components.map(comp => comp.wordIndex).sort((a, b) => a - b);
+                        console.log('DEBUG: Processing construction', {
+                          type: construction.type,
+                          wordIndicesCount: wordIndices.length,
+                          wordIndices: [...wordIndices]
+                        });
                         
                         // Only submit supported construction types
                         if (construction.type === 'mudaf-mudaf-ilayh' || construction.type === 'jar-majroor') {
                           // Temporarily set the construction type and indices in the quiz manager
+                          console.log('DEBUG: Setting construction type:', construction.type);
                           selectConstructionType(construction.type);
                           
-                          // Clear current selection and set the word indices from the component construction
-                          selectedIndices.forEach(index => toggleWordSelection(index));
-                          wordIndices.forEach(index => {
-                            if (!selectedIndices.includes(index)) {
-                              toggleWordSelection(index);
-                            }
-                          });
+                          // Set the word indices directly from the component construction
+                          console.log('DEBUG: Current selectedIndices before updating:', 
+                            selectedIndices.length > 0 ? [...selectedIndices] : []);
                           
-                          // Submit using the traditional method after a brief delay to ensure state updates
+                          console.log('DEBUG: Setting word indices directly to:', wordIndices);
+                          // Use the new direct setter function
+                          setWordIndices(wordIndices);
+                          
+                          // Submit using the traditional method after a longer delay to ensure state updates
+                          console.log('DEBUG: Setting timeout to submit construction');
                           setTimeout(() => {
+                            console.log('DEBUG: In timeout, checking selectedIndices:', 
+                              selectedIndices.length > 0 ? [...selectedIndices] : []);
+                            console.log('DEBUG: In timeout, calling submitCurrentConstruction');
                             submitCurrentConstruction();
-                          }, 50);
+                          }, 150);
                         }
                       });
                       
                       // Reset component selection after submission
                       setTimeout(() => {
+                        console.log('DEBUG: Resetting component selection');
                         componentSelection.reset();
                       }, 100);
                     }
