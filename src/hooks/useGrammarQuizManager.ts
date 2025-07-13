@@ -186,10 +186,31 @@ export function useGrammarQuizManager() {
 
   // Submit current construction and continue selecting
   const submitCurrentConstruction = useCallback(() => {
-    if (!state.currentSession || 
-        !state.quizState.currentQuestion || 
-        state.selectedIndices.length === 0 || 
-        !state.selectedConstructionType) {
+    console.log('DEBUG: submitCurrentConstruction called with state:', {
+      hasCurrentSession: !!state.currentSession,
+      hasCurrentQuestion: !!state.quizState.currentQuestion,
+      selectedIndices: state.selectedIndices,
+      selectedIndicesLength: state.selectedIndices.length,
+      selectedConstructionType: state.selectedConstructionType
+    });
+    
+    if (!state.currentSession) {
+      console.log('ERROR: Cannot submit construction - no current session');
+      return;
+    }
+    
+    if (!state.quizState.currentQuestion) {
+      console.log('ERROR: Cannot submit construction - no current question');
+      return;
+    }
+    
+    if (state.selectedIndices.length === 0) {
+      console.log('ERROR: Cannot submit construction - no selected indices');
+      return;
+    }
+    
+    if (!state.selectedConstructionType) {
+      console.log('ERROR: Cannot submit construction - no construction type selected');
       return;
     }
 
