@@ -241,8 +241,17 @@ export class IdafaDetector {
   private performDetection() {
     console.log('🔍 Starting comprehensive Idafa detection...');
     
+    // Track which segments are already part of a construction to prevent overlaps
+    const usedSegments = new Set<number>();
+    
     for (let i = 0; i < this.segments.length - 1; i++) {
       const currentSegment = this.segments[i];
+      
+      // Skip segments already part of a construction
+      if (usedSegments.has(i)) {
+        console.log(`⏭️ Skipping segment "${currentSegment.text}" at position ${i} - already used in another construction`);
+        continue;
+      }
       
       // Skip non-noun tokens for Mudaf candidates
       if (!this.isNounCandidate(currentSegment)) {
@@ -264,14 +273,14 @@ export class IdafaDetector {
       }
 
       // Look for Mudaf Ilayh candidates
-      this.findMudafIlayh(currentSegment, i);
+      this.findMudafIlayh(currentSegment, i, usedSegments);
     }
 
     // Detect constructions with attached pronouns
     this.detectAttachedPronounConstructions();
   }
 
-  private findMudafIlayh(mudafSegment: MorphologicalDetails, mudafIndex: number) {
+  private findMudafIlayh(mudafSegment: MorphologicalDetails, mudafIndex: number, usedSegments?: Set<number>) {
     // Check immediate next token first (most common case)
     for (let j = mudafIndex + 1; j < Math.min(mudafIndex + 4, this.segments.length); j++) {
       const candidateSegment = this.segments[j];
@@ -298,6 +307,13 @@ export class IdafaDetector {
         
         this.constructions.push(construction);
         console.log(`✅ IDAFA DETECTED: ${construction.mudaf.text} + ${construction.mudafIlayh.text} (${construction.certainty})`);
+        
+        // Mark both mudaf and mudaf-ilayh as used to prevent overlapping constructions
+        if (usedSegments) {
+          usedSegments.add(mudafIndex);
+          usedSegments.add(j);
+          console.log(`🔒 Marking segments at positions ${mudafIndex} and ${j} as used`);
+        }
         
         break; // Found the Mudaf Ilayh for this Mudaf
       }
