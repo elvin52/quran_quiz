@@ -16,9 +16,14 @@ import { detectHarfNasbIsmuha } from './harfNasbIsmuhaDetector';
  * Only includes the 4 supported construction types
  */
 export async function detectAllConstructions(
-  segments: Record<string, MorphologicalDetails>
+  segments: Record<string, MorphologicalDetails>,
+  verseInfo?: { surahId?: number; verseId?: number; arabicText?: string }
 ): Promise<GrammarConstruction[]> {
   console.log('🔍 Detecting ALL supported grammar constructions...');
+  
+  if (verseInfo && verseInfo.surahId && verseInfo.verseId) {
+    console.log(`📖 Processing Surah ${verseInfo.surahId}:${verseInfo.verseId}${verseInfo.arabicText ? ' - ' + verseInfo.arabicText : ''}`);
+  }
   
   // Run all detectors in parallel for efficiency
   const [
@@ -27,10 +32,10 @@ export async function detectAllConstructions(
     filFailConstructions, 
     harfNasbIsmuhaConstructions
   ] = await Promise.all([
-    detectIdafa(segments),
-    detectJarMajroor(segments),
-    detectFilFail(segments),
-    detectHarfNasbIsmuha(segments)
+    detectIdafa(segments, verseInfo),
+    detectJarMajroor(segments, verseInfo),
+    detectFilFail(segments, verseInfo),
+    detectHarfNasbIsmuha(segments, verseInfo)
   ]);
   
   // Combine all construction types
@@ -41,7 +46,7 @@ export async function detectAllConstructions(
     ...harfNasbIsmuhaConstructions
   ];
   
-  console.log(`✅ Total constructions detected: ${allConstructions.length}`);
+  console.log(`✅ Total constructions detected: ${allConstructions.length}${verseInfo ? ' in Surah ' + verseInfo.surahId + ':' + verseInfo.verseId : ''}`);
   return allConstructions;
 }
 

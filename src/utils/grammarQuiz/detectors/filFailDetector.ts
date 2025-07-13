@@ -8,12 +8,20 @@ import { MorphologicalDetails } from "@/types/morphology";
 import { GrammarConstruction } from "@/types/grammarQuiz";
 
 /**
- * Detects Fiʿl–Fāʿil constructions in a verse
+ * Detects Fil-Fail (verb-subject) constructions in a verse
+ * 
+ * @param segments - Record of morphological segments with IDs
+ * @param verseInfo - Optional verse metadata (surah/verse ID, text)
+ * @returns Array of Fil-Fail (verb-subject) grammatical constructions
  */
 export function detectFilFail(
-  segments: Record<string, MorphologicalDetails>
+  segments: Record<string, MorphologicalDetails>,
+  verseInfo?: { surahId?: number; verseId?: number; arabicText?: string }
 ): Promise<GrammarConstruction[]> {
-  console.log('🎯 SELECTIVE: Detecting ONLY Fiʿl–Fāʿil relationships');
+  console.log('🎯 SELECTIVE: Detecting ONLY Fil-Fail relationships');
+  if (verseInfo?.surahId && verseInfo?.verseId) {
+    console.log(`📖 Fil-Fail detection in Surah ${verseInfo.surahId}:${verseInfo.verseId}${verseInfo.arabicText ? ' - ' + verseInfo.arabicText : ''}`);
+  }
   const constructions: GrammarConstruction[] = [];
   const segmentArray = Object.values(segments).sort((a, b) => {
     const aNum = parseInt(a.id.split('-').join(''));
@@ -69,6 +77,6 @@ export function detectFilFail(
     }
   }
   
-  console.log(`  🎯 Total Fiʿl–Fāʿil constructions found: ${constructions.length}`);
+  console.log(`  🎯 Total Fiʿl–Fāʿil constructions found: ${constructions.length}${verseInfo ? ' in Surah ' + verseInfo.surahId + ':' + verseInfo.verseId : ''}`);
   return Promise.resolve(constructions);
 }

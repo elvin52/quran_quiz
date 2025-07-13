@@ -31,8 +31,15 @@ export async function createQuestionFromVerse(
 ): Promise<GrammarQuizQuestion> {
   console.log(`🎯 Creating question from Surah ${verse.surahId}:${verse.verseId}`);
   
-  // Detect grammatical constructions in the verse
-  const constructions = await detectAllConstructions(verse.segments);
+  // Create verse info object for detailed logging
+  const verseInfo = {
+    surahId: verse.surahId,
+    verseId: verse.verseId,
+    arabicText: verse.arabicText
+  };
+  
+  // Detect grammatical constructions in the verse, passing verse info for better logging
+  const constructions = await detectAllConstructions(verse.segments, verseInfo);
   
   // Filter constructions to only include the supported types
   const filteredConstructions = constructions.filter(

@@ -9,11 +9,19 @@ import { GrammarConstruction } from "@/types/grammarQuiz";
 
 /**
  * Detects Harf Nasb + Ismuha constructions in a verse
+ * 
+ * @param segments - Record of morphological segments with IDs
+ * @param verseInfo - Optional verse metadata (surah/verse ID, text)
+ * @returns Array of Harf Nasb + Ismuha grammatical constructions
  */
 export function detectHarfNasbIsmuha(
-  segments: Record<string, MorphologicalDetails>
+  segments: Record<string, MorphologicalDetails>,
+  verseInfo?: { surahId?: number; verseId?: number; arabicText?: string }
 ): Promise<GrammarConstruction[]> {
   console.log('🎯 SELECTIVE: Detecting ONLY Harf Nasb + Ismuha relationships');
+  if (verseInfo?.surahId && verseInfo?.verseId) {
+    console.log(`📖 Harf Nasb + Ismuha detection in Surah ${verseInfo.surahId}:${verseInfo.verseId}${verseInfo.arabicText ? ' - ' + verseInfo.arabicText : ''}`);
+  }
   const constructions: GrammarConstruction[] = [];
   const segmentArray = Object.values(segments).sort((a, b) => {
     const aNum = parseInt(a.id.split('-').join(''));

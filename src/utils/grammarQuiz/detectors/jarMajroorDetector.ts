@@ -9,11 +9,19 @@ import { GrammarConstruction } from "@/types/grammarQuiz";
 
 /**
  * Detects Jar-Majroor constructions in a verse
+ * 
+ * @param segments - Record of morphological segments with IDs
+ * @param verseInfo - Optional verse metadata (surah/verse ID, text)
+ * @returns Array of Jar-Majroor grammatical constructions
  */
 export function detectJarMajroor(
-  segments: Record<string, MorphologicalDetails>
+  segments: Record<string, MorphologicalDetails>,
+  verseInfo?: { surahId?: number; verseId?: number; arabicText?: string }
 ): Promise<GrammarConstruction[]> {
   console.log('🎯 SELECTIVE: Detecting ONLY Jar wa Majrūr relationships');
+  if (verseInfo?.surahId && verseInfo?.verseId) {
+    console.log(`📖 Jar-Majroor detection in Surah ${verseInfo.surahId}:${verseInfo.verseId}`);
+  }
   const constructions: GrammarConstruction[] = [];
   const segmentArray = Object.values(segments).sort((a, b) => {
     const aNum = parseInt(a.id.split('-').join(''));

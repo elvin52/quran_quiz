@@ -9,10 +9,15 @@ import { GrammarConstruction } from "@/types/grammarQuiz";
 import { detectIdafaConstructions as originalDetectIdafa, IdafaConstruction } from '../../idafaDetector';
 
 /**
- * Detects Idafa (Mudaf-Mudaf Ilayh) constructions in a verse
+ * Detects idafa (possession/annexation) constructions in Arabic text
+ * 
+ * @param segments - Record of morphological segments with IDs
+ * @param verseInfo - Optional verse metadata (surah/verse ID, text)
+ * @returns Array of Idafa grammatical constructions
  */
 export async function detectIdafa(
-  segments: Record<string, MorphologicalDetails>
+  segments: Record<string, MorphologicalDetails>,
+  verseInfo?: { surahId?: number; verseId?: number; arabicText?: string }
 ): Promise<GrammarConstruction[]> {
   console.log('🎯 SELECTIVE: Detecting ONLY Idafa (Mudaf-Mudaf Ilayh) constructions');
   
@@ -26,6 +31,10 @@ export async function detectIdafa(
     (idafa, index) => convertIdafaToConstruction(idafa, segmentArray, index)
   );
   
+  console.log('🔍 Detecting idafa (possession) constructions...');
+  if (verseInfo?.surahId && verseInfo?.verseId) {
+    console.log(`📖 Idafa detection in Surah ${verseInfo.surahId}:${verseInfo.verseId}`);
+  }
   console.log(`  🎯 Total Idafa constructions found: ${constructions.length}`);
   return constructions;
 }
