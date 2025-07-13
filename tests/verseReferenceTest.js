@@ -201,6 +201,41 @@ async function runTest() {
     console.log(`- Will display: ${uiVerseMetadata.surahName} (${uiVerseMetadata.surahNameArabic})`);
     console.log(`- Will display translation: ${uiVerseMetadata.translation.substring(0, 30)}...`);
     
+    // TEST ARABIC TEXT DISPLAY WITH BOTH SEGMENT FORMATS
+    console.log('\n🇦🇷 Testing Arabic Text Display:');
+    
+    // Function to simulate the processSegments logic from QuranVerseDisplay component
+    function processSegments(segments) {
+      console.log(`  Input segment type: ${Array.isArray(segments) ? 'Array' : 'Object/Record'}`);
+      
+      // Convert segments to array if they are in Record format
+      const segmentsArray = Array.isArray(segments) 
+        ? segments 
+        : Object.values(segments);
+      
+      console.log(`  Number of segments: ${segmentsArray.length}`);
+      console.log('  Segments text:');
+      segmentsArray.forEach((seg, i) => {
+        console.log(`    ${i+1}. ${seg.text} (ID: ${seg.id})`);
+      });
+      
+      return segmentsArray;
+    }
+    
+    // Test with object/record format (original)
+    console.log('\n📝 Testing with Record/Object format segments:');
+    const recordSegments = processSegments(sampleSegments);
+    
+    // Test with array format (UI expected)
+    console.log('\n📝 Testing with Array format segments:');
+    const arraySegments = processSegments(Object.values(sampleSegments));
+    
+    // Simulate the QuranVerseDisplay render
+    console.log('\n📋 Simulating QuranVerseDisplay render:');
+    console.log('  ⟶ Verse title: ' + verseInfo.surahNameArabic + ' • ' + verseInfo.surahName + ' • Verse ' + verseInfo.verseId);
+    console.log('  ⟶ Arabic text: ' + arraySegments.map(seg => seg.text).join(' '));
+    console.log('  ⟶ Translation: ' + verseInfo.translation);
+    
     console.log('\n✅ Test completed successfully');
   } catch (error) {
     console.error('❌ Test failed:', error);

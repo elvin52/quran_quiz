@@ -32,7 +32,7 @@ const ROLE_COLORS = {
 };
 
 export interface QuranVerseDisplayProps {
-  segments: MorphologicalDetails[];
+  segments: MorphologicalDetails[] | Record<string, MorphologicalDetails>; // Support both array and record formats
   selectedIndices: number[];
   correctIndices?: number[];
   incorrectIndices?: number[];
@@ -66,10 +66,20 @@ export function QuranVerseDisplay({
   showRoleIndicators = false
 }: QuranVerseDisplayProps) {
   
-  // Process segments through aggregation if needed
-  const processSegments = useCallback((segments: MorphologicalDetails[]) => {
+  // Process segments through aggregation if needed - handles both array and object formats
+  const processSegments = useCallback((segments: MorphologicalDetails[] | Record<string, MorphologicalDetails>) => {
+    // Convert segments to array if they are in Record format
+    const segmentsArray: MorphologicalDetails[] = Array.isArray(segments) 
+      ? segments 
+      : Object.values(segments);
+    
+    if (segmentsArray.length === 0) {
+      console.warn('No segments available to process');
+      return [];
+    }
+    
     // For now, use fallback aggregation to maintain stability
-    const aggregated = selectiveAggregationService.aggregateSegments(segments);
+    const aggregated = selectiveAggregationService.aggregateSegments(segmentsArray);
     
     return aggregated.map((aggSeg, index) => ({
       ...aggSeg.originalSegments[0], // Use first segment as base
@@ -78,7 +88,7 @@ export function QuranVerseDisplay({
       morphology: aggSeg.morphology,
       type: aggSeg.type,
       originalIndices: aggSeg.originalSegments.map((_, idx) => 
-        segments.findIndex(s => s.id === aggSeg.originalSegments[idx].id)
+        segmentsArray.findIndex(s => s.id === aggSeg.originalSegments[idx].id)
       ).filter(idx => idx !== -1)
     }));
   }, []);
