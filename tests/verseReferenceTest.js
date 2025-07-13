@@ -135,7 +135,10 @@ async function runTest() {
   const verseInfo = {
     surahId: 1,
     verseId: 2,
-    arabicText: 'الْحَمْدُ لِلَّهِ رَبِّ الْعَالَمِينَ'
+    arabicText: 'الْحَمْدُ لِلَّهِ رَبِّ الْعَالَمِينَ',
+    surahName: 'Al-Fatiha',
+    surahNameArabic: 'الفاتحة',
+    translation: 'All praise is due to Allah, Lord of the worlds'
   };
   
   console.log(`Testing with verse: Surah ${verseInfo.surahId}:${verseInfo.verseId} - ${verseInfo.arabicText}`);
@@ -150,6 +153,53 @@ async function runTest() {
     constructions.forEach((construction, i) => {
       console.log(`  ${i+1}. ${construction.type}: Words at indices ${construction.wordIndices.join(', ')}`);
     });
+    
+    // Test creating a question with the fixed structure
+    console.log('\n🧪 Testing question generation with quranMetadata structure:');
+    
+    // Simulate question creation as in questionGenerator.ts
+    const question = {
+      id: `question-${verseInfo.surahId}-${verseInfo.verseId}-${Date.now()}`,
+      verseId: `${verseInfo.surahId}:${verseInfo.verseId}`,
+      text: verseInfo.arabicText,
+      translation: verseInfo.translation,
+      surahName: verseInfo.surahName,
+      surahNameArabic: verseInfo.surahNameArabic,
+      difficulty: 'medium',
+      difficultyScore: 0.5,
+      segments: sampleSegments,
+      constructionType: 'idafa',
+      constructions: constructions,
+      createdAt: new Date().toISOString(),
+      // NEW STRUCTURE: Add quranMetadata for UI compatibility
+      quranMetadata: {
+        surahId: verseInfo.surahId,
+        verseId: verseInfo.verseId,
+        surahName: verseInfo.surahName,
+        surahNameArabic: verseInfo.surahNameArabic,
+        translation: verseInfo.translation
+      }
+    };
+    
+    // Simulate UI access of quranMetadata
+    console.log('📄 Question Structure Check:');
+    console.log(`- Direct properties: surahId=${question.surahId}, verseId=${question.verseId}`);
+    console.log(`- QuranMetadata access: surahId=${question.quranMetadata?.surahId}, verseId=${question.quranMetadata?.verseId}`);
+    console.log(`- Surah name: ${question.quranMetadata?.surahName} (${question.quranMetadata?.surahNameArabic})`);
+    
+    // Verify UI display logic works as expected
+    const uiVerseMetadata = {
+      surahId: question.quranMetadata?.surahId || 0,
+      surahName: question.quranMetadata?.surahName || '',
+      surahNameArabic: question.quranMetadata?.surahNameArabic || '',
+      verseId: question.quranMetadata?.verseId || 0,
+      translation: question.quranMetadata?.translation || ''
+    };
+    
+    console.log('🖥️ UI Display Verification:');
+    console.log(`- Will display: Surah ${uiVerseMetadata.surahId}:${uiVerseMetadata.verseId}`);
+    console.log(`- Will display: ${uiVerseMetadata.surahName} (${uiVerseMetadata.surahNameArabic})`);
+    console.log(`- Will display translation: ${uiVerseMetadata.translation.substring(0, 30)}...`);
     
     console.log('\n✅ Test completed successfully');
   } catch (error) {

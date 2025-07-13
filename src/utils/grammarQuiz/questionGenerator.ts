@@ -66,7 +66,7 @@ export async function createQuestionFromVerse(
   const difficulty = calculateDifficulty(filteredConstructions.length, wordCount, hasInferredConstructions);
   const difficultyScore = estimateDifficultyScore(filteredConstructions, wordCount);
   
-  // Create and return question
+  // Create and return question with proper metadata structure for UI
   return {
     id: `question-${verse.surahId}-${verse.verseId}-${Date.now()}`,
     verseId: `${verse.surahId}:${verse.verseId}`,
@@ -80,6 +80,14 @@ export async function createQuestionFromVerse(
     constructionType: targetConstructionType,
     constructions: filteredConstructions,
     createdAt: new Date().toISOString(),
+    // Add quranMetadata object for UI compatibility
+    quranMetadata: {
+      surahId: verse.surahId,
+      verseId: verse.verseId,
+      surahName: verse.surahName,
+      surahNameArabic: verse.surahNameArabic,
+      translation: verse.translation
+    }
   };
 }
 
@@ -125,13 +133,14 @@ export async function findVersesWithConstructions(
       continue;
     }
     
-    // If a specific construction type is requested, check if it's present
+    // Check if this verse matches our requirements (contains specified construction or any)
     if (config.constructionType) {
+      // Specific construction type requested
       if (supportedConstructions.some(c => c.type === config.constructionType)) {
         versesWithConstructions.push(verse);
       }
-    } else {
-      // No specific type requested, include verse if it has any supported construction
+    } else if (supportedConstructions.length > 0) {
+      // Any supported construction type is fine
       versesWithConstructions.push(verse);
     }
     
