@@ -15,6 +15,14 @@ import {
   CONSTRUCTION_CONFIG
 } from './grammarQuiz';
 
+// Import detector functions to expose directly
+import {
+  detectIdafa,
+  detectJarMajroor,
+  detectFilFail,
+  detectHarfNasbIsmuha
+} from './grammarQuiz/detectors';
+
 // Re-export all types for backward compatibility
 import {
   GrammarQuizQuestion,
@@ -37,3 +45,12 @@ export default grammarQuizEngine;
 
 // For backward compatibility, also export the singleton as a named export
 export { grammarQuizEngine };
+
+// For backward compatibility with the original ST object structure
+// This ensures that legacy code accessing ST.detectIdafa will work
+export const ST = {
+  detectIdafa,
+  detectJarMajroor,
+  detectFilFail,
+  detectHarfNasbIsmuha
+};
