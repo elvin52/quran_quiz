@@ -51,7 +51,6 @@ export function GrammarQuizPage({ className }: GrammarQuizPageProps) {
     isSessionCompleted,
     startSession,
     toggleWordSelection,
-    setWordIndices,
     selectConstructionType,
     submitCurrentConstruction,
     finalizeQuestion,
@@ -478,22 +477,29 @@ export function GrammarQuizPage({ className }: GrammarQuizPageProps) {
                           console.log('DEBUG: Setting construction type:', construction.type);
                           selectConstructionType(construction.type);
                           
-                          // Set the word indices directly from the component construction
-                          console.log('DEBUG: Current selectedIndices before updating:', 
+                          // Clear current selection and set the word indices from the component construction
+                          console.log('DEBUG: Current selectedIndices before clearing:', 
                             selectedIndices.length > 0 ? [...selectedIndices] : []);
                           
-                          console.log('DEBUG: Setting word indices directly to:', wordIndices);
-                          // Use the new direct setter function
-                          setWordIndices(wordIndices);
+                          selectedIndices.forEach(index => {
+                            console.log('DEBUG: Toggling off word index:', index);
+                            toggleWordSelection(index);
+                          });
                           
-                          // Submit using the traditional method after a longer delay to ensure state updates
+                          console.log('DEBUG: Adding new word indices:', wordIndices);
+                          wordIndices.forEach(index => {
+                            if (!selectedIndices.includes(index)) {
+                              console.log('DEBUG: Toggling on word index:', index);
+                              toggleWordSelection(index);
+                            }
+                          });
+                          
+                          // Submit using the traditional method after a brief delay to ensure state updates
                           console.log('DEBUG: Setting timeout to submit construction');
                           setTimeout(() => {
-                            console.log('DEBUG: In timeout, checking selectedIndices:', 
-                              selectedIndices.length > 0 ? [...selectedIndices] : []);
                             console.log('DEBUG: In timeout, calling submitCurrentConstruction');
                             submitCurrentConstruction();
-                          }, 150);
+                          }, 50);
                         }
                       });
                       

@@ -173,17 +173,6 @@ export function useGrammarQuizManager() {
       };
     });
   }, [state.quizState.isAnswered, state.quizState.showFeedback]);
-  
-  // Direct Word Selection (set all indices at once)
-  const setWordIndices = useCallback((indices: number[]) => {
-    if (state.quizState.isAnswered || state.quizState.showFeedback) return;
-    
-    console.log('DEBUG: Setting word indices directly:', indices);
-    setState(prev => ({
-      ...prev,
-      selectedIndices: [...indices]
-    }));
-  }, [state.quizState.isAnswered, state.quizState.showFeedback]);
 
   // Construction Type Selection
   const selectConstructionType = useCallback((type: 'mudaf-mudaf-ilayh' | 'jar-majroor') => {
@@ -197,20 +186,10 @@ export function useGrammarQuizManager() {
 
   // Submit current construction and continue selecting
   const submitCurrentConstruction = useCallback(() => {
-    // DEBUG: Log the current state before attempting to submit
-    console.log('DEBUG submitCurrentConstruction - Starting submission attempt with:', {
-      hasSession: !!state.currentSession,
-      hasQuestion: !!state.quizState.currentQuestion,
-      selectedIndices: state.selectedIndices ? [...state.selectedIndices] : [],
-      selectedIndicesLength: state.selectedIndices?.length || 0,
-      selectedConstructionType: state.selectedConstructionType || 'none'
-    });
-    
     if (!state.currentSession || 
         !state.quizState.currentQuestion || 
         state.selectedIndices.length === 0 || 
         !state.selectedConstructionType) {
-      console.log('DEBUG submitCurrentConstruction - Early return due to missing requirements');
       return;
     }
 
@@ -224,13 +203,6 @@ export function useGrammarQuizManager() {
       selectionTimeMs: responseTime
     };
 
-    // DEBUG: Log before validation
-    console.log('DEBUG submitCurrentConstruction - About to validate answer:', {
-      selectedIndices: [...userSelection.selectedIndices],
-      relationshipType: userSelection.relationshipType,
-      questionType: state.quizState.currentQuestion?.type
-    });
-
     const validation = grammarQuizEngine.validateAnswer(
       state.quizState.currentQuestion,
       userSelection
@@ -242,15 +214,6 @@ export function useGrammarQuizManager() {
       constructionType: state.selectedConstructionType,
       validation
     };
-
-    // DEBUG: Log before updating state
-    console.log('DEBUG submitCurrentConstruction - Adding new construction:', {
-      constructionId: newConstruction.id,
-      indices: [...newConstruction.indices],
-      constructionType: newConstruction.constructionType,
-      isCorrect: validation.isCorrect,
-      existingConstructions: state.submittedConstructions.length
-    });
 
     setState(prev => ({
       ...prev,
@@ -271,29 +234,17 @@ export function useGrammarQuizManager() {
 
   // Finalize all constructions for the question and move to feedback
   const finalizeQuestion = useCallback(() => {
-    // DEBUG: Log quizState and segments
-    console.log('DEBUG finalizeQuestion - Starting with segments:', {
-      segmentsType: state.quizState.currentQuestion?.segments ? 
-        (Array.isArray(state.quizState.currentQuestion.segments) ? 'array' : 'object') : 'undefined',
+    console.log("SEGMENTS BEFORE FINALIZE:", {
       segments: state.quizState.currentQuestion?.segments,
-      currentQuestion: state.quizState.currentQuestion
+      type: state.quizState.currentQuestion?.segments ? 
+        (Array.isArray(state.quizState.currentQuestion.segments) ? 'array' : 'object') : 'undefined',
+      submittedConstructions: state.submittedConstructions
     });
-
-    if (!state.currentSession || !state.quizState.currentQuestion) {
-      console.log('DEBUG finalizeQuestion - Early return, missing session or question');
-      return;
-    }
+    
+    if (!state.currentSession || !state.quizState.currentQuestion) return;
 
     // Import the supported construction types
     const SUPPORTED_CONSTRUCTION_TYPES = ['mudaf-mudaf-ilayh', 'jar-majroor', 'fil-fail', 'harf-nasb-ismuha'];
-    
-    // DEBUG: Log before filter operation
-    console.log('DEBUG finalizeQuestion - Before filter operation:', {
-      correctAnswersExists: !!state.quizState.currentQuestion.correctAnswers,
-      correctAnswersType: typeof state.quizState.currentQuestion.correctAnswers,
-      correctAnswersIsArray: Array.isArray(state.quizState.currentQuestion.correctAnswers),
-      correctAnswersLength: state.quizState.currentQuestion.correctAnswers?.length
-    });
     
     // Only count supported constructions, not all constructions
     const supportedConstructions = state.quizState.currentQuestion.correctAnswers.filter(c => 
@@ -449,26 +400,31 @@ export function useGrammarQuizManager() {
   // Check if session is completed
   const isSessionCompleted = state.currentSession?.endTime !== undefined;
 
-  // Return hook object with all functions
   return {
+    // State
     quizState: state.quizState,
     currentSession: state.currentSession,
     selectedIndices: state.selectedIndices,
     selectedConstructionType: state.selectedConstructionType,
     submittedConstructions: state.submittedConstructions,
-    currentValidation: state.currentValidation,
+    currentValidation: currentValidation.current,
     canSubmitConstruction,
     canFinalizeQuestion,
-    isSessionCompleted: !!state.sessionStats,
+    isSessionCompleted,
+
+    // Actions
     startSession,
-    nextQuestion,
-    resetQuiz,
-    selectConstructionType,
     toggleWordSelection,
-    setWordIndices,
+    selectConstructionType,
     submitCurrentConstruction,
     finalizeQuestion,
+    nextQuestion,
+    resetQuiz,
     getCurrentStatistics,
+
+    // Helpers
+    getCurrentQuestionNumber: () => state.currentSession ? state.currentSession.questions.length + 1 : 0,
+    getProgress: () => state.quizState.progress,
     getAllSelectedIndices: () => [
       ...state.selectedIndices,
       ...state.submittedConstructions.flatMap(c => c.indices)

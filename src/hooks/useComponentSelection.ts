@@ -14,6 +14,7 @@
 
 import { useState, useCallback, useMemo } from 'react';
 import { toast } from '@/components/ui/use-toast';
+import { ensureSegmentArray, getSegmentsLength } from '@/utils/segmentUtils';
 
 // Debugging helper - logs with timestamp and component prefix
 const debugLog = (message: string, data?: any) => {
@@ -77,10 +78,11 @@ export interface UseComponentSelectionReturn {
 export function useComponentSelection(
   segments: MorphologicalDetails[] | Record<string, MorphologicalDetails>
 ): UseComponentSelectionReturn {
-  // Convert segments to array if they are in object format
-  const segmentsArray: MorphologicalDetails[] = Array.isArray(segments)
-    ? segments
-    : Object.values(segments);
+  // Convert segments to array using our utility function
+  const segmentsArray: MorphologicalDetails[] = ensureSegmentArray(segments);
+  
+  // Debug the segment format conversion
+  debugLog(`Initialized segmentsArray with ${segmentsArray.length} items from ${Array.isArray(segments) ? 'array' : 'object'} format`);
   
   const [state, setState] = useState<ComponentSelectionState>({
     selectedWordIndices: [],
@@ -94,8 +96,11 @@ export function useComponentSelection(
     try {
       debugLog(`toggleWordSelection(${wordIndex}) called`);
       
-      if (wordIndex < 0 || wordIndex >= segmentsArray.length) {
-        throw new Error(`Word index ${wordIndex} is out of bounds (0-${segmentsArray.length-1})`);
+      const arrayLength = segmentsArray.length;
+      debugLog(`Current segmentsArray length: ${arrayLength}`);
+      
+      if (wordIndex < 0 || wordIndex >= arrayLength) {
+        throw new Error(`Word index ${wordIndex} is out of bounds (0-${arrayLength-1})`);
       }
       
       setState(prev => {
