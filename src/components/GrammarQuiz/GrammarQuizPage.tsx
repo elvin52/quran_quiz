@@ -62,7 +62,12 @@ export function GrammarQuizPage({ className }: GrammarQuizPageProps) {
 
   // Component selection for granular mode
   const componentSelection = useComponentSelection(
-    quizState.currentQuestion?.segments || []
+    // Ensure segments are always passed as an array
+    quizState.currentQuestion?.segments 
+      ? (Array.isArray(quizState.currentQuestion.segments) 
+          ? quizState.currentQuestion.segments 
+          : Object.values(quizState.currentQuestion.segments))
+      : []
   );
   
   // Toggle between construction and component selection modes

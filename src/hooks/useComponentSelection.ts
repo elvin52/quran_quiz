@@ -75,8 +75,12 @@ export interface UseComponentSelectionReturn {
 }
 
 export function useComponentSelection(
-  segments: MorphologicalDetails[]
+  segments: MorphologicalDetails[] | Record<string, MorphologicalDetails>
 ): UseComponentSelectionReturn {
+  // Convert segments to array if they are in object format
+  const segmentsArray: MorphologicalDetails[] = Array.isArray(segments)
+    ? segments
+    : Object.values(segments);
   
   const [state, setState] = useState<ComponentSelectionState>({
     selectedWordIndices: [],
