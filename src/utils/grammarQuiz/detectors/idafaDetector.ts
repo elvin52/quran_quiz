@@ -6,12 +6,7 @@
 
 import { MorphologicalDetails } from "@/types/morphology";
 import { GrammarConstruction } from "@/types/grammarQuiz";
-import { IdafaDetector, IdafaConstruction } from '../../idafaDetector';
-
-/**
- * Singleton instance of the IdafaDetector
- */
-const idafaDetector = new IdafaDetector();
+import { detectIdafaConstructions as originalDetectIdafa, IdafaConstruction } from '../../idafaDetector';
 
 /**
  * Detects Idafa (Mudaf-Mudaf Ilayh) constructions in a verse
@@ -20,8 +15,11 @@ export async function detectIdafa(
   segments: Record<string, MorphologicalDetails>
 ): Promise<GrammarConstruction[]> {
   console.log('🎯 SELECTIVE: Detecting ONLY Idafa (Mudaf-Mudaf Ilayh) constructions');
+  
+  // Use the original detection function from idafaDetector.ts
+  const detectionResult = originalDetectIdafa(segments);
+  const idafaConstructions = detectionResult.constructions;
   const segmentArray = Object.values(segments);
-  const idafaConstructions = await idafaDetector.detectIdafa(segmentArray);
   
   // Convert IdafaConstruction objects to standard GrammarConstruction format
   const constructions: GrammarConstruction[] = idafaConstructions.map(
