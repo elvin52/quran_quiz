@@ -5,11 +5,12 @@
  * Follows the same patterns as PronounQuizPage.tsx for consistency.
  */
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
+import { useToast } from '@/components/ui/use-toast';
 import { 
   BookOpen, 
   Target, 
@@ -39,6 +40,8 @@ interface GrammarQuizPageProps {
 }
 
 export function GrammarQuizPage({ className }: GrammarQuizPageProps) {
+  const { toast } = useToast();
+  
   const {
     quizState,
     currentSession,
@@ -445,23 +448,20 @@ export function GrammarQuizPage({ className }: GrammarQuizPageProps) {
                 
                 <Button
                   onClick={() => {
-                    console.log('DEBUG: Add Construction button clicked', {
-                      selectionMode,
-                      hasWordSelection: selectedIndices.length > 0,
-                      selectedConstructionType,
-                      completedConstructionsCount: selectionMode === 'component' ? 
-                        componentSelection.getCompletedConstructions().length : 0
-                    });
-                    
-                    if (selectionMode === 'construction') {
-                      // Traditional mode
-                      console.log('DEBUG: Traditional mode - calling submitCurrentConstruction()');
-                      submitCurrentConstruction();
-                    } else {
-                      // Component mode - submit completed constructions one by one
+                    const processAndSubmitConstructions = () => {
                       const completedConstructions = componentSelection.getCompletedConstructions();
                       console.log('DEBUG: Component mode - found completedConstructions count:', 
                         completedConstructions.length);
+                      
+                      if (completedConstructions.length === 0) {
+                        console.log('DEBUG: No completed constructions to submit!');
+                        toast({
+                          title: "No completed construction",
+                          description: "Please select words and assign roles to create a construction",
+                          variant: "destructive"
+                        });
+                        return;
+                      }
                       
                       completedConstructions.forEach(construction => {
                         const wordIndices = construction.components.map(comp => comp.wordIndex).sort((a, b) => a - b);
@@ -481,16 +481,16 @@ export function GrammarQuizPage({ className }: GrammarQuizPageProps) {
                           console.log('DEBUG: Current selectedIndices before clearing:', 
                             selectedIndices.length > 0 ? [...selectedIndices] : []);
                           
-                          selectedIndices.forEach(index => {
-                            console.log('DEBUG: Toggling off word index:', index);
-                            toggleWordSelection(index);
+                          selectedIndices.forEach(idx => {
+                            console.log('DEBUG: Toggling off word index:', idx);
+                            toggleWordSelection(idx);
                           });
                           
                           console.log('DEBUG: Adding new word indices:', wordIndices);
-                          wordIndices.forEach(index => {
-                            if (!selectedIndices.includes(index)) {
-                              console.log('DEBUG: Toggling on word index:', index);
-                              toggleWordSelection(index);
+                          wordIndices.forEach(idx => {
+                            if (!selectedIndices.includes(idx)) {
+                              console.log('DEBUG: Toggling on word index:', idx);
+                              toggleWordSelection(idx);
                             }
                           });
                           
@@ -508,17 +508,87 @@ export function GrammarQuizPage({ className }: GrammarQuizPageProps) {
                         console.log('DEBUG: Resetting component selection');
                         componentSelection.reset();
                       }, 100);
+                    };
+                    
+                    console.log('DEBUG: Add Construction button clicked', {
+                      selectionMode,
+                      hasWordSelection: selectedIndices.length > 0,
+                      selectedConstructionType,
+                      componentMode: {
+                        selectedWordIndices: componentSelection.state.selectedWordIndices.length,
+                        assignedComponents: componentSelection.state.assignedComponents.length,
+                        constructions: componentSelection.state.constructions.length,
+                        completedConstructions: componentSelection.getCompletedConstructions().length
+                      }
+                    });
+                    
+                    if (selectionMode === 'construction') {
+                      // Traditional mode
+                      console.log('DEBUG: Traditional mode - calling submitCurrentConstruction()');
+                      submitCurrentConstruction();
+                    } else {
+                      // Component mode
+                      
+                      // Check if we have selected words without assigned roles
+                      if (componentSelection.state.selectedWordIndices.length > 0) {
+                        console.log('DEBUG: Words selected but no roles assigned, assigning default role');
+                        // We have selection but no constructions - need to assign roles first
+                        // Automatically assign a default role (e.g., mudaf) to selected words
+                        componentSelection.selectAndAssignRole('mudaf');
+                        
+                        // The selectAndAssignRole creates components but we need to wait for the
+                        // construction formation process to complete
+                        setTimeout(() => {
+                          console.log('DEBUG: After role assignment - constructions state:', {
+                            assignedComponents: componentSelection.state.assignedComponents.length,
+                            constructions: componentSelection.state.constructions.length,
+                            completedConstructions: componentSelection.getCompletedConstructions().length
+                          });
+                          
+                          // Try to form constructions from assigned components
+                          // If that didn't work, we may need to assign a complementary role
+                          if (componentSelection.getCompletedConstructions().length === 0 && 
+                              componentSelection.state.assignedComponents.length > 0) {
+                            console.log('DEBUG: No completed constructions, assigning complementary role');
+                            // Select different words for the complementary role
+                            // For now we're doing this programmatically, but ideally the user would
+                            // select the other words and assign the complementary role
+                            
+                            // Get the segments array from the quiz state for word indices
+                            const segments = quizState.currentQuestion?.segments || [];
+                            const segmentsArray = Array.isArray(segments) ? segments : Object.values(segments);
+                            
+                            const unassignedWordIndices = Array.from(
+                              { length: segmentsArray.length },
+                              (_, i) => i
+                            ).filter(i => !componentSelection.state.assignedComponents.some(c => c.wordIndex === i));
+                            
+                            console.log('DEBUG: Unassigned words:', unassignedWordIndices);
+                            
+                            if (unassignedWordIndices.length > 0) {
+                              // Clear current selection
+                              componentSelection.clearWordSelection();
+                              
+                              // Select the first unassigned word
+                              componentSelection.toggleWordSelection(unassignedWordIndices[0]);
+                              
+                              // Assign complementary role
+                              componentSelection.selectAndAssignRole('mudaf-ilayh');
+                            }
+                          }
+                          
+                          // Submit any completed constructions
+                          processAndSubmitConstructions();
+                        }, 100);
+                      } else {
+                        // Process any existing completed constructions
+                        processAndSubmitConstructions();
+                      }
                     }
                   }}
-                  disabled={
-                    quizState.isLoading || 
-                    (selectionMode === 'construction' && !canSubmitConstruction) ||
-                    (selectionMode === 'component' && 
-                      // Enable button if there are completed constructions OR if enough components are selected
-                      componentSelection.getCompletedConstructions().length === 0 && 
-                      // Check if we have enough assigned components to form a construction (at least 2)
-                      componentSelection.state.assignedComponents.length < 2)
-                  }
+                  disabled={quizState.isLoading || 
+                    (selectionMode === 'construction' && 
+                      (selectedIndices.length === 0 || !selectedConstructionType))}
                   size="lg"
                   className="min-w-48"
                 >
