@@ -79,6 +79,60 @@ export function GrammarQuizPage({ className }: GrammarQuizPageProps) {
   // Track submitted construction IDs to avoid duplicates
   const [submittedConstructionIds, setSubmittedConstructionIds] = useState<string[]>([]);
   
+  // Helper function to submit a component construction
+  const submitComponentConstruction = useCallback((construction: any) => {
+    console.log('🚀 Auto-submitting construction:', construction);
+    
+    // Only submit supported construction types
+    if (construction.type === 'mudaf-mudaf-ilayh' || construction.type === 'jar-majroor') {
+      const wordIndices = construction.components.map(comp => comp.wordIndex).sort((a, b) => a - b);
+      
+      try {
+        // Add this construction ID to the submitted list to avoid duplicates
+        setSubmittedConstructionIds(prev => [...prev, construction.id]);
+        
+        // Set the construction type first
+        selectConstructionType(construction.type);
+        console.log('✓ Set construction type:', construction.type);
+        
+        // Get all currently selected indices
+        const allSelectedIndices = [...selectedIndices];
+        
+        // First, deselect any currently selected indices
+        if (allSelectedIndices.length > 0) {
+          console.log('✓ Clearing current selection:', allSelectedIndices);
+          allSelectedIndices.forEach(index => {
+            toggleWordSelection(index);
+          });
+        }
+        
+        // Then select all word indices for this construction
+        console.log('✓ Setting new selection:', wordIndices);
+        wordIndices.forEach(index => {
+          toggleWordSelection(index);
+        });
+        
+        // Now submit the construction with the correctly toggled indices
+        setTimeout(() => {
+          submitCurrentConstruction();
+          console.log('✅ Construction auto-submitted successfully:', {
+            type: construction.type,
+            wordIndices
+          });
+        }, 100); // Small delay to ensure toggles are processed
+      } catch (error) {
+        console.error('❌ Error during construction submission:', error);
+        toast({
+          title: "Submission Error",
+          description: "There was a problem submitting the construction.",
+          status: "error"
+        });
+      }
+    } else {
+      console.log('⚠️ Skipping unsupported construction type:', construction.type);
+    }
+  }, [selectConstructionType, toggleWordSelection, selectedIndices, submitCurrentConstruction, toast]);
+  
   // Auto-submission logic for completed constructions in Component Mode
   useEffect(() => {
     if (selectionMode === 'component' && !quizState.isLoading) {
@@ -102,41 +156,7 @@ export function GrammarQuizPage({ className }: GrammarQuizPageProps) {
         }
       }
     }
-  }, [componentSelection.state.constructions, selectionMode, quizState.isLoading]);
-  
-  // Helper function to submit a component construction
-  const submitComponentConstruction = useCallback((construction) => {
-    console.log('🚀 Auto-submitting construction:', construction);
-    
-    // Only submit supported construction types
-    if (construction.type === 'mudaf-mudaf-ilayh' || construction.type === 'jar-majroor') {
-      const wordIndices = construction.components.map(comp => comp.wordIndex).sort((a, b) => a - b);
-      
-      // Add this construction ID to the submitted list
-      setSubmittedConstructionIds(prev => [...prev, construction.id]);
-      
-      // Temporarily set the construction type in the quiz manager
-      selectConstructionType(construction.type);
-      
-      // Clear current selection and set the word indices from the component construction
-      selectedIndices.forEach(index => toggleWordSelection(index));
-      wordIndices.forEach(index => {
-        if (!selectedIndices.includes(index)) {
-          toggleWordSelection(index);
-        }
-      });
-      
-      // Submit using the traditional method
-      submitCurrentConstruction();
-      
-      console.log('✅ Construction auto-submitted successfully:', {
-        type: construction.type,
-        wordIndices
-      });
-    } else {
-      console.log('⚠️ Skipping unsupported construction type:', construction.type);
-    }
-  }, [selectConstructionType, toggleWordSelection, selectedIndices, submitCurrentConstruction]);
+  }, [componentSelection.state.constructions, selectionMode, quizState.isLoading, submittedConstructionIds, submitComponentConstruction]);
 
   const progress = quizState.progress;
   const questionNumber = currentSession ? currentSession.questions.length + 1 : 0;
