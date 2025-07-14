@@ -268,7 +268,9 @@ export function useGrammarQuizManager() {
     const SUPPORTED_CONSTRUCTION_TYPES = ['mudaf-mudaf-ilayh', 'jar-majroor', 'fil-fail', 'harf-nasb-ismuha'];
     
     // Only count supported constructions, not all constructions
-    const supportedConstructions = state.quizState.currentQuestion.correctAnswers.filter(c => 
+    // Add null check for correctAnswers to prevent 'filter of undefined' error
+    const correctAnswers = state.quizState.currentQuestion.correctAnswers || [];
+    const supportedConstructions = correctAnswers.filter(c => 
       SUPPORTED_CONSTRUCTION_TYPES.includes(c.type)
     );
     const totalConstructions = supportedConstructions.length;
