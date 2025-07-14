@@ -91,47 +91,79 @@ export function GrammarQuizPage({ className }: GrammarQuizPageProps) {
         // Add this construction ID to the submitted list to avoid duplicates
         setSubmittedConstructionIds(prev => [...prev, construction.id]);
         
-        // Set the construction type first
-        selectConstructionType(construction.type);
-        console.log('✓ Set construction type:', construction.type);
-        
-        // Get all currently selected indices
+        // First, clear any existing selection and construction type to prevent state conflicts
         const allSelectedIndices = [...selectedIndices];
-        
-        // First, deselect any currently selected indices
         if (allSelectedIndices.length > 0) {
-          console.log('✓ Clearing current selection:', allSelectedIndices);
-          allSelectedIndices.forEach(index => {
-            toggleWordSelection(index);
-          });
+          console.log('✓ Clearing existing selection:', allSelectedIndices);
+          // We need to clear one by one
+          allSelectedIndices.forEach(index => toggleWordSelection(index));
+          
+          // Give time for state to update
+          setTimeout(() => {
+            // Now set the construction type
+            selectConstructionType(construction.type);
+            console.log('✓ Set construction type to:', construction.type);
+            
+            // Then select all word indices for this construction
+            console.log('✓ Selecting words:', wordIndices);
+            wordIndices.forEach(index => toggleWordSelection(index));
+            
+            // Now submit the construction after indices are set
+            setTimeout(() => {
+              console.log('✅ Calling submitCurrentConstruction with:', {
+                type: construction.type,
+                indices: wordIndices
+              });
+              submitCurrentConstruction();
+              
+              // Log the state after submission to help debug
+              setTimeout(() => {
+                console.log('📝 Submission status check:', {
+                  submittedConstructions: submittedConstructions.length,
+                  canFinalizeQuestion
+                });
+              }, 50);
+            }, 150);
+          }, 50);
+        } else {
+          // No existing selection, can proceed directly
+          // Set the construction type first
+          selectConstructionType(construction.type);
+          console.log('✓ Set construction type to:', construction.type);
+          
+          // Select all word indices for this construction
+          console.log('✓ Selecting words:', wordIndices);
+          wordIndices.forEach(index => toggleWordSelection(index));
+          
+          // Now submit the construction with the correctly toggled indices
+          setTimeout(() => {
+            console.log('✅ Calling submitCurrentConstruction directly with:', {
+              type: construction.type,
+              indices: wordIndices
+            });
+            submitCurrentConstruction();
+            
+            // Log the state after submission to help debug
+            setTimeout(() => {
+              console.log('📝 Submission status check:', {
+                submittedConstructions: submittedConstructions.length,
+                canFinalizeQuestion
+              });
+            }, 50);
+          }, 100);
         }
-        
-        // Then select all word indices for this construction
-        console.log('✓ Setting new selection:', wordIndices);
-        wordIndices.forEach(index => {
-          toggleWordSelection(index);
-        });
-        
-        // Now submit the construction with the correctly toggled indices
-        setTimeout(() => {
-          submitCurrentConstruction();
-          console.log('✅ Construction auto-submitted successfully:', {
-            type: construction.type,
-            wordIndices
-          });
-        }, 100); // Small delay to ensure toggles are processed
       } catch (error) {
         console.error('❌ Error during construction submission:', error);
         toast({
           title: "Submission Error",
           description: "There was a problem submitting the construction.",
-          status: "error"
+          variant: "destructive"
         });
       }
     } else {
       console.log('⚠️ Skipping unsupported construction type:', construction.type);
     }
-  }, [selectConstructionType, toggleWordSelection, selectedIndices, submitCurrentConstruction, toast]);
+  }, [selectConstructionType, toggleWordSelection, selectedIndices, submittedConstructions, submitCurrentConstruction, canFinalizeQuestion, toast]);
   
   // Auto-submission logic for completed constructions in Component Mode
   useEffect(() => {
@@ -483,9 +515,28 @@ export function GrammarQuizPage({ className }: GrammarQuizPageProps) {
                         return;
                       }
                       
-                      completedConstructions.forEach(construction => {
+                      // Avoid race conditions by processing one construction at a time with delays
+                      const processNextConstruction = (index = 0) => {
+                        if (index >= completedConstructions.length) {
+                          console.log('DEBUG: Finished processing all constructions');
+                          
+                          // Reset component selection after all submissions are done
+                          console.log('DEBUG: Resetting component selection');
+                          componentSelection.reset();
+                          
+                          // Log the state after all submissions
+                          console.log('DEBUG: Final state after all submissions:', {
+                            submittedConstructions: submittedConstructions.length,
+                            canFinalizeQuestion
+                          });
+                          return;
+                        }
+                        
+                        const construction = completedConstructions[index];
                         const wordIndices = construction.components.map(comp => comp.wordIndex).sort((a, b) => a - b);
+                        
                         console.log('DEBUG: Processing construction', {
+                          index,
                           type: construction.type,
                           wordIndicesCount: wordIndices.length,
                           wordIndices: [...wordIndices]
@@ -493,41 +544,20 @@ export function GrammarQuizPage({ className }: GrammarQuizPageProps) {
                         
                         // Only submit supported construction types
                         if (construction.type === 'mudaf-mudaf-ilayh' || construction.type === 'jar-majroor') {
-                          // Temporarily set the construction type and indices in the quiz manager
-                          console.log('DEBUG: Setting construction type:', construction.type);
-                          selectConstructionType(construction.type);
+                          submitComponentConstruction(construction);
                           
-                          // Clear current selection and set the word indices from the component construction
-                          console.log('DEBUG: Current selectedIndices before clearing:', 
-                            selectedIndices.length > 0 ? [...selectedIndices] : []);
-                          
-                          selectedIndices.forEach(idx => {
-                            console.log('DEBUG: Toggling off word index:', idx);
-                            toggleWordSelection(idx);
-                          });
-                          
-                          console.log('DEBUG: Adding new word indices:', wordIndices);
-                          wordIndices.forEach(idx => {
-                            if (!selectedIndices.includes(idx)) {
-                              console.log('DEBUG: Toggling on word index:', idx);
-                              toggleWordSelection(idx);
-                            }
-                          });
-                          
-                          // Submit using the traditional method after a brief delay to ensure state updates
-                          console.log('DEBUG: Setting timeout to submit construction');
+                          // Wait before processing the next construction
                           setTimeout(() => {
-                            console.log('DEBUG: In timeout, calling submitCurrentConstruction');
-                            submitCurrentConstruction();
-                          }, 50);
+                            processNextConstruction(index + 1);
+                          }, 250);
+                        } else {
+                          // Skip this construction and move to the next
+                          processNextConstruction(index + 1);
                         }
-                      });
+                      };
                       
-                      // Reset component selection after submission
-                      setTimeout(() => {
-                        console.log('DEBUG: Resetting component selection');
-                        componentSelection.reset();
-                      }, 100);
+                      // Start processing constructions
+                      processNextConstruction();
                     };
                     
                     console.log('DEBUG: Add Construction button clicked', {
